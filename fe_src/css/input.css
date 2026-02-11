@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Custom card styles */
+  .stat-card {
+    @apply bg-white p-5 rounded-lg shadow-sm border border-gray-100;
+  }
+
+  .stat-card h3 {
+    @apply text-xs uppercase text-gray-500 mb-2 font-medium tracking-wide;
+  }
+
+  .stat-card .value {
+    @apply text-3xl font-bold text-gray-800;
+  }
+
+  /* Section styles */
+  .section-card {
+    @apply bg-white p-5 rounded-lg shadow-sm border border-gray-100 mb-5;
+  }
+
+  .section-card h2 {
+    @apply text-sm font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100 uppercase tracking-wide;
+  }
+
+  /* Progress bar styles */
+  .progress-bar {
+    @apply flex items-center gap-2;
+  }
+
+  .progress-bar-fill {
+    @apply h-2 bg-gray-800 rounded-full min-w-[4px] transition-all duration-300;
+  }
+
+  /* Chart styles */
+  .chart-container {
+    @apply h-48 relative;
+  }
+
+  .chart-bar {
+    @apply flex-1 bg-blue-500 min-h-[4px] rounded-t-sm relative transition-all duration-200 cursor-pointer hover:bg-blue-600;
+  }
+
+  .chart-bar::after {
+    content: attr(data-label);
+    @apply absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] whitespace-nowrap text-gray-600;
+  }
+
+  .chart-bar::before {
+    content: attr(data-value);
+    @apply absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] opacity-0 transition-opacity;
+  }
+
+  .chart-bar:hover::before {
+    @apply opacity-100;
+  }
+
+  /* Tab styles */
+  .tab-btn {
+    @apply px-5 py-2.5 text-sm font-medium text-gray-500 border-b-2 border-transparent -mb-0.5 transition-colors hover:text-gray-700;
+  }
+
+  .tab-btn.active {
+    @apply text-gray-900 border-gray-900;
+  }
+
+  /* Period selector button styles */
+  .period-btn {
+    @apply px-4 py-2 text-sm border border-gray-200 bg-white rounded-md hover:bg-gray-50 transition-colors;
+  }
+
+  .period-btn.active {
+    @apply bg-gray-900 text-white border-gray-900 hover:bg-gray-800;
+  }
+
+  /* Info section styles */
+  .info-box {
+    @apply bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5;
+  }
+
+  .info-box h3 {
+    @apply text-sm font-semibold text-blue-800 mb-2;
+  }
+
+  /* Code block styles */
+  .code-block {
+    @apply bg-gray-900 text-gray-300 p-4 rounded-lg font-mono text-sm overflow-x-auto mt-2;
+  }
+
+  .code-block code {
+    @apply text-green-400;
+  }
+
+  /* Table styles */
+  .data-table {
+    @apply w-full border-collapse;
+  }
+
+  .data-table th,
+  .data-table td {
+    @apply text-left py-3 px-3 border-b border-gray-100;
+  }
+
+  .data-table th {
+    @apply text-xs font-semibold text-gray-500 uppercase tracking-wider;
+  }
+
+  /* Bot card special style */
+  .bot-card {
+    @apply bg-amber-50 border-amber-200;
+  }
+
+  .bot-card h3 {
+    @apply text-amber-800;
+  }
+
+  .bot-card .value {
+    @apply text-amber-900;
+  }
+
+  /* Realtime indicator */
+  .realtime-value {
+    @apply text-green-500;
+  }
+
+  /* Loading state */
+  .loading-state {
+    @apply text-center py-10 text-gray-500;
+  }
+}
+
+@layer utilities {
+  /* Custom animations */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

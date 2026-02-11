@@ -1,0 +1,12 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    queries: "queries.sql"
+    schema: "schema.sql"
+    gen:
+      go:
+        package: "sqlcgen"
+        out: "."
+        sql_package: "database/sql"
+        emit_interface: true
+        query_parameter_limit: 2

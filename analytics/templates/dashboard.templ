@@ -1,0 +1,10 @@
+package templates
+
+// Dashboard renders the main analytics dashboard page with htmx
+templ Dashboard() {
+	@Layout("Nanolytica Dashboard", "visitors") {
+		@PeriodSelector("week", "/admin/analytics/fragments/stats")
+		@ContentContainer()
+		<div hx-get="/admin/analytics/fragments/stats?period=week" hx-trigger="load" hx-target="#content"></div>
+	}
+}

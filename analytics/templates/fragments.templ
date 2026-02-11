@@ -1,0 +1,415 @@
+package templates
+
+import "fmt"
+
+// PeriodSelectorWithStats renders the period selector with visitor stats content
+templ PeriodSelectorWithStats(period string, stats *StatsViewModel, realtime int, days int, hourly bool, monthly bool) {
+	@PeriodSelector(period, "/admin/analytics/fragments/stats")
+	@StatsFragment(stats, realtime, days, hourly, monthly)
+}
+
+// PeriodSelectorWithBotStats renders the period selector with bot stats content
+templ PeriodSelectorWithBotStats(period string, stats *BotStatsViewModel, days int, hourly bool, monthly bool) {
+	@PeriodSelector(period, "/admin/analytics/fragments/bot-stats")
+	@BotStatsFragment(stats, days, hourly, monthly)
+}
+
+// SetupContent renders the setup tab content
+templ SetupContent(origin string) {
+	@SetupFragment(origin)
+}
+
+// StatsFragment renders the complete stats view as HTML fragment
+templ StatsFragment(stats *StatsViewModel, realtime int, periodDays int, hourly bool, monthly bool) {
+	@StatsGridStats(stats, realtime)
+	@ViewsChartSection(stats.DailyViews, hourly, monthly)
+	@TopPagesSection(stats.TopPages)
+	@LatestPagesSection(stats.LatestPages)
+	@DimensionStatsSections(stats.BrowserStats, stats.OSStats, stats.DeviceStats, stats.ReferrerStats)
+}
+
+// BotStatsFragment renders the complete bot stats view as HTML fragment
+templ BotStatsFragment(stats *BotStatsViewModel, periodDays int, hourly bool, monthly bool) {
+	@BotStatsGrid(stats)
+	@BotViewsChartSection(stats.DailyVisits, hourly, monthly)
+	@TopBotsSection(stats.TopBots)
+	@BotTopPagesSection(stats.TopPages)
+}
+
+// StatsFragmentOnly renders only the stats content without period selector (for htmx updates)
+templ StatsFragmentOnly(stats *StatsViewModel, realtime int, days int, hourly bool, monthly bool) {
+	@StatsFragment(stats, realtime, days, hourly, monthly)
+}
+
+// BotStatsFragmentOnly renders only the bot stats content without period selector (for htmx updates)
+templ BotStatsFragmentOnly(stats *BotStatsViewModel, days int, hourly bool, monthly bool) {
+	@BotStatsFragment(stats, days, hourly, monthly)
+}
+
+// StatsGridStats renders the main stat cards
+templ StatsGridStats(stats *StatsViewModel, realtime int) {
+	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+		<div class="stat-card">
+			<h3>Realtime (5min)</h3>
+			<div class="value realtime-value">{ formatNumber(realtime) }</div>
+		</div>
+		<div class="stat-card">
+			<h3>Unique Visitors</h3>
+			<div class="value">{ formatNumber(stats.UniqueVisitors) }</div>
+		</div>
+		<div class="stat-card">
+			<h3>Page Views</h3>
+			<div class="value">{ formatNumber(stats.TotalViews) }</div>
+		</div>
+		<div class="stat-card">
+			<h3>Avg. Duration</h3>
+			<div class="value">{ formatDuration(stats.AvgDuration) }</div>
+		</div>
+	</div>
+}
+
+// BotStatsGrid renders the bot stats grid
+templ BotStatsGrid(stats *BotStatsViewModel) {
+	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+		<div class="stat-card bot-card">
+			<h3>Total Bot Visits</h3>
+			<div class="value">{ formatNumber(stats.TotalVisits) }</div>
+		</div>
+	</div>
+}
+
+// ViewsChartSection renders the views over time chart
+templ ViewsChartSection(dailyViews []DailyViewViewModel, hourly bool, monthly bool) {
+	<div class="section-card">
+		<h2>{ chartTitle(hourly, monthly) }</h2>
+		@Chart(dailyViews)
+	</div>
+}
+
+// BotViewsChartSection renders the bot views over time chart
+templ BotViewsChartSection(dailyVisits []DailyViewViewModel, hourly bool, monthly bool) {
+	<div class="section-card">
+		<h2>{ botChartTitle(hourly, monthly) }</h2>
+		@Chart(dailyVisits)
+	</div>
+}
+
+// Chart renders a bar chart
+templ Chart(data []DailyViewViewModel) {
+	if len(data) == 0 {
+		<div class="loading-state">No data available</div>
+	} else {
+		<div class="chart-container">
+			<div class="flex items-end h-44 gap-1 pt-5">
+				for _, item := range data {
+					@ChartBar(item, maxViews(data))
+				}
+			</div>
+		</div>
+	}
+}
+
+// ChartBar renders a single bar in the chart
+templ ChartBar(item DailyViewViewModel, maxViews int) {
+	{{ height := calculateHeight(item.Views, maxViews) }}
+	{{ label := formatChartLabel(item.Date) }}
+	<div 
+		class="chart-bar" 
+		style={ fmt.Sprintf("height:%d%%", height) }
+		data-label={ label }
+		data-value={ fmt.Sprintf("%d", item.Views) }
+		title={ fmt.Sprintf("%s: %d views", label, item.Views) }
+	></div>
+}
+
+// TopPagesSection renders the top pages table
+templ TopPagesSection(pages []PageStatViewModel) {
+	if len(pages) > 0 {
+		<div class="section-card">
+			<h2>Top Pages</h2>
+			<table class="data-table">
+				<tbody>
+					for _, page := range pages {
+						@PageRow(page, maxPageViews(pages))
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+// BotTopPagesSection renders the top pages for bots
+templ BotTopPagesSection(pages []PageStatViewModel) {
+	if len(pages) > 0 {
+		<div class="section-card">
+			<h2>Top Pages (Bot)</h2>
+			<table class="data-table">
+				<tbody>
+					for _, page := range pages {
+						@PageRow(page, maxPageViews(pages))
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+// PageRow renders a single page row with bar
+templ PageRow(page PageStatViewModel, maxViews int) {
+	<tr>
+		<td><code class="text-sm bg-gray-100 px-2 py-1 rounded">{ page.Path }</code></td>
+		<td class="text-right">
+			@Bar("", page.Views, maxViews)
+		</td>
+	</tr>
+}
+
+// LatestPagesSection renders the latest visited pages
+templ LatestPagesSection(pages []LatestPageVisitViewModel) {
+	if len(pages) > 0 {
+		<div class="section-card">
+			<h2>Latest Visited Pages</h2>
+			<table class="data-table">
+				<tbody>
+					for _, page := range pages {
+						@LatestPageRow(page)
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+// LatestPageRow renders a single latest page row
+templ LatestPageRow(page LatestPageVisitViewModel) {
+	<tr>
+		<td><code class="text-sm bg-gray-100 px-2 py-1 rounded">{ page.Path }</code></td>
+		<td class="text-xs text-gray-500">{ page.Browser }</td>
+		<td class="text-xs text-gray-500 text-right">{ page.Timestamp }</td>
+	</tr>
+}
+
+// DimensionStatsSections renders all dimension stats (browsers, OS, devices, referrers)
+templ DimensionStatsSections(browsers, os, devices, referrers []DimensionStatViewModel) {
+	@DimensionSection("Browsers", browsers)
+	@DimensionSection("Operating Systems", os)
+	@DimensionSection("Devices", devices)
+	@DimensionSection("Referrers", referrers)
+}
+
+// TopBotsSection renders the top bots table
+templ TopBotsSection(bots []DimensionStatViewModel) {
+	@DimensionSection("Top Bots", bots)
+}
+
+// DimensionSection renders a dimension stats section
+templ DimensionSection(title string, stats []DimensionStatViewModel) {
+	if len(stats) > 0 {
+		<div class="section-card">
+			<h2>{ title }</h2>
+			<table class="data-table">
+				<tbody>
+					for _, stat := range stats {
+						@DimensionRow(stat, maxDimensionCount(stats))
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+// DimensionRow renders a single dimension row with bar
+templ DimensionRow(stat DimensionStatViewModel, maxCount int) {
+	<tr>
+		<td>
+			@Bar(stat.Name, stat.Count, maxCount)
+		</td>
+	</tr>
+}
+
+// Bar renders a progress bar
+templ Bar(label string, value int, max int) {
+	{{ width := calculateWidth(value, max) }}
+	<div class="progress-bar">
+		<div class="progress-bar-fill" style={ fmt.Sprintf("width:%d%%", width) }></div>
+		<span class="text-xs text-gray-500 min-w-[40px] text-right">{ formatNumber(value) }</span>
+		if label != "" {
+			<span class="text-sm text-gray-700">{ label }</span>
+		}
+	</div>
+}
+
+// SetupFragment renders the setup tab content
+templ SetupFragment(origin string) {
+	<div class="info-box">
+		<h3>📋 Quick Setup</h3>
+		<p class="text-sm text-blue-700">Add this single line to your HTML <code class="bg-blue-100 px-1 rounded">&lt;head&gt;</code> or before the closing <code class="bg-blue-100 px-1 rounded">&lt;/body&gt;</code> tag:</p>
+		<div class="code-block">
+			<code>&lt;script src="{ origin }/nanolytica.js"&gt;&lt;/script&gt;</code>
+		</div>
+	</div>
+	
+	<div class="section-card">
+		<h2>Features</h2>
+		<table class="data-table">
+			<tbody>
+				<tr><td>Privacy-first (no cookies, no tracking consent needed)</td></tr>
+				<tr><td>Bot detection (Googlebot, Bingbot, etc.)</td></tr>
+				<tr><td>Real-time visitor count</td></tr>
+				<tr><td>Browser, OS, Device breakdown</td></tr>
+				<tr><td>Referrer tracking</td></tr>
+				<tr><td>Time on page tracking</td></tr>
+			</tbody>
+		</table>
+	</div>
+	
+	<div class="section-card">
+		<h2>API Endpoints</h2>
+		<table class="data-table">
+			<tbody>
+				<tr>
+					<td><code class="text-sm bg-gray-100 px-2 py-1 rounded">POST /api/analytics/collect</code></td>
+					<td class="text-gray-600">Collect visit data (called automatically)</td>
+				</tr>
+				<tr>
+					<td><code class="text-sm bg-gray-100 px-2 py-1 rounded">GET /admin/analytics/api/stats?period=week</code></td>
+					<td class="text-gray-600">Get visitor statistics (JSON)</td>
+				</tr>
+				<tr>
+					<td><code class="text-sm bg-gray-100 px-2 py-1 rounded">GET /admin/analytics/api/bot-stats?period=week</code></td>
+					<td class="text-gray-600">Get bot statistics (JSON)</td>
+				</tr>
+				<tr>
+					<td><code class="text-sm bg-gray-100 px-2 py-1 rounded">GET /admin/analytics/fragments/stats?period=week</code></td>
+					<td class="text-gray-600">Get visitor statistics (HTML)</td>
+				</tr>
+				<tr>
+					<td><code class="text-sm bg-gray-100 px-2 py-1 rounded">GET /admin/analytics/fragments/bot-stats?period=week</code></td>
+					<td class="text-gray-600">Get bot statistics (HTML)</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+}
+
+// Helper functions
+
+func formatNumber(n int) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	if n < 1000000 {
+		return fmt.Sprintf("%.1fK", float64(n)/1000)
+	}
+	return fmt.Sprintf("%.1fM", float64(n)/1000000)
+}
+
+func formatDuration(seconds int) string {
+	if seconds < 60 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	return fmt.Sprintf("%dm %ds", seconds/60, seconds%60)
+}
+
+func chartTitle(hourly, monthly bool) string {
+	if monthly {
+		return "Views by Month"
+	}
+	if hourly {
+		return "Views by Hour"
+	}
+	return "Views Over Time"
+}
+
+func botChartTitle(hourly, monthly bool) string {
+	if monthly {
+		return "Bot Visits by Month"
+	}
+	if hourly {
+		return "Bot Visits by Hour"
+	}
+	return "Bot Visits Over Time"
+}
+
+func maxViews(data []DailyViewViewModel) int {
+	max := 0
+	for _, item := range data {
+		if item.Views > max {
+			max = item.Views
+		}
+	}
+	if max == 0 {
+		return 1
+	}
+	return max
+}
+
+func maxPageViews(pages []PageStatViewModel) int {
+	max := 0
+	for _, page := range pages {
+		if page.Views > max {
+			max = page.Views
+		}
+	}
+	if max == 0 {
+		return 1
+	}
+	return max
+}
+
+func maxDimensionCount(stats []DimensionStatViewModel) int {
+	max := 0
+	for _, stat := range stats {
+		if stat.Count > max {
+			max = stat.Count
+		}
+	}
+	if max == 0 {
+		return 1
+	}
+	return max
+}
+
+func calculateHeight(views, max int) int {
+	if max == 0 {
+		return 0
+	}
+	return (views * 100) / max
+}
+
+func calculateWidth(value, max int) int {
+	if max == 0 {
+		return 0
+	}
+	return (value * 100) / max
+}
+
+func formatChartLabel(date string) string {
+	monthNames := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+
+	// For dates like "2026-02-09" (YYYY-MM-DD from daily queries), return "Feb 09"
+	if len(date) == 10 && date[4] == '-' && date[7] == '-' {
+		month := 0
+		fmt.Sscanf(date[5:7], "%d", &month)
+		if month >= 1 && month <= 12 {
+			return fmt.Sprintf("%s %s", monthNames[month-1], date[8:])
+		}
+	}
+	// For dates like "02-09" (MM-DD), return "Feb 09"
+	if len(date) == 5 && date[2] == '-' {
+		month := 0
+		fmt.Sscanf(date[:2], "%d", &month)
+		if month >= 1 && month <= 12 {
+			return fmt.Sprintf("%s %s", monthNames[month-1], date[3:])
+		}
+	}
+	// For dates like "2026-02" (YYYY-MM from monthly queries), return "Feb"
+	if len(date) == 7 && date[4] == '-' {
+		month := 0
+		fmt.Sscanf(date[5:7], "%d", &month)
+		if month >= 1 && month <= 12 {
+			return monthNames[month-1]
+		}
+	}
+	return date
+}

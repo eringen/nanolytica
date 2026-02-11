@@ -1,0 +1,116 @@
+package templates
+
+// Layout renders the base HTML layout with htmx and Tailwind CSS
+templ Layout(title string, activeTab string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title }</title>
+			<script src="/static/js/htmx.min.js"></script>
+			<link rel="stylesheet" href="/static/css/styles.css"/>
+		</head>
+		<body class="bg-gray-100 min-h-screen">
+			<div class="max-w-6xl mx-auto p-6">
+				<h1 class="text-3xl font-bold text-gray-800 mb-6">Nanolytica Dashboard</h1>
+				@TabSelector(activeTab)
+				{ children... }
+			</div>
+		</body>
+	</html>
+}
+
+// TabSelector renders the tab navigation with htmx
+templ TabSelector(activeTab string) {
+	<div class="border-b border-gray-200 mb-6">
+		<div class="flex gap-1">
+			<button 
+				hx-get="/admin/analytics/fragments/stats"
+				hx-target="#content"
+				hx-trigger="click"
+				hx-push-url="false"
+				onclick="switchTab('visitors')"
+				data-tab="visitors"
+				class={ "tab-btn", templ.KV("active", activeTab == "visitors") }
+			>
+				Visitors
+			</button>
+			<button 
+				hx-get="/admin/analytics/fragments/bot-stats"
+				hx-target="#content"
+				hx-trigger="click"
+				hx-push-url="false"
+				onclick="switchTab('bots')"
+				data-tab="bots"
+				class={ "tab-btn", templ.KV("active", activeTab == "bots") }
+			>
+				Bots & Crawlers
+			</button>
+			<button 
+				hx-get="/admin/analytics/fragments/setup"
+				hx-target="#content"
+				hx-trigger="click"
+				hx-push-url="false"
+				onclick="switchTab('setup')"
+				data-tab="setup"
+				class={ "tab-btn", templ.KV("active", activeTab == "setup") }
+			>
+				Setup
+			</button>
+		</div>
+	</div>
+}
+
+// PeriodSelector renders the period buttons with htmx
+templ PeriodSelector(activePeriod string, hxGet string) {
+	<div class="flex gap-2 mb-6" id="period-selector">
+		<button 
+			hx-get={ hxGet + "?period=today" }
+			hx-target="#content"
+			data-period="today"
+			onclick="setActivePeriod('today')"
+			class={ "period-btn", templ.KV("active", activePeriod == "today") }
+		>
+			Today
+		</button>
+		<button 
+			hx-get={ hxGet + "?period=week" }
+			hx-target="#content"
+			data-period="week"
+			onclick="setActivePeriod('week')"
+			class={ "period-btn", templ.KV("active", activePeriod == "week") }
+		>
+			Last 7 Days
+		</button>
+		<button 
+			hx-get={ hxGet + "?period=month" }
+			hx-target="#content"
+			data-period="month"
+			onclick="setActivePeriod('month')"
+			class={ "period-btn", templ.KV("active", activePeriod == "month") }
+		>
+			Last 30 Days
+		</button>
+		<button 
+			hx-get={ hxGet + "?period=year" }
+			hx-target="#content"
+			data-period="year"
+			onclick="setActivePeriod('year')"
+			class={ "period-btn", templ.KV("active", activePeriod == "year") }
+		>
+			Last Year
+		</button>
+	</div>
+}
+
+// ContentContainer renders the main content area
+templ ContentContainer() {
+	<div id="content" class="animate-fade-in">
+		<div class="loading-state">
+			<div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+			<p class="mt-2 text-gray-600">Loading...</p>
+		</div>
+	</div>
+	<script src="/static/js/dashboard.min.js"></script>
+}
