@@ -72,7 +72,7 @@ templ PeriodSelector(activePeriod string, hxGet string) {
 			onclick="setActivePeriod('today')"
 			class={ "period-btn", templ.KV("active", activePeriod == "today") }
 		>
-			Today
+			Last 24 Hours
 		</button>
 		<button 
 			hx-get={ hxGet + "?period=week" }

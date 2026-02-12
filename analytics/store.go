@@ -357,10 +357,11 @@ func (s *Store) GetStats(from, to time.Time, hourly, monthly bool) (*Stats, erro
 				setErr(fmt.Errorf("hourly views: %w", err))
 				return
 			}
-			result = make([]DailyView, len(rows))
+			sparse := make([]DailyView, len(rows))
 			for i, r := range rows {
-				result[i] = DailyView{Date: r.Date, Views: int(r.Views)}
+				sparse[i] = DailyView{Date: r.Date, Views: int(r.Views)}
 			}
+			result = fillHourlyGaps(from, sparse)
 		} else if monthly {
 			rows, err := s.q.MonthlyViews(ctx, from, to)
 			if err != nil {
@@ -437,9 +438,11 @@ func (s *Store) GetBotStats(from, to time.Time, hourly, monthly bool) (*BotStats
 		if err != nil {
 			return nil, fmt.Errorf("bot views: %w", err)
 		}
-		for _, r := range rows {
-			stats.DailyVisits = append(stats.DailyVisits, DailyView{Date: r.Date, Views: int(r.Views)})
+		sparse := make([]DailyView, len(rows))
+		for i, r := range rows {
+			sparse[i] = DailyView{Date: r.Date, Views: int(r.Views)}
 		}
+		stats.DailyVisits = fillHourlyGaps(from, sparse)
 	} else if monthly {
 		rows, err := s.q.MonthlyBotVisits(ctx, from, to)
 		if err != nil {
@@ -459,6 +462,23 @@ func (s *Store) GetBotStats(from, to time.Time, hourly, monthly bool) (*BotStats
 	}
 
 	return stats, nil
+}
+
+// fillHourlyGaps ensures all 24 hours are present in the result, filling gaps with 0.
+// Hours are ordered starting from the 'from' time, so the chart shows a rolling 24h window.
+func fillHourlyGaps(from time.Time, sparse []DailyView) []DailyView {
+	viewsByHour := make(map[string]int, len(sparse))
+	for _, v := range sparse {
+		viewsByHour[v.Date] = v.Views
+	}
+
+	result := make([]DailyView, 24)
+	for i := 0; i < 24; i++ {
+		hour := from.Add(time.Duration(i) * time.Hour)
+		label := fmt.Sprintf("%02d:00", hour.Hour())
+		result[i] = DailyView{Date: label, Views: viewsByHour[label]}
+	}
+	return result
 }
 
 // CleanupOldVisits removes visits and bot visits older than the retention period.

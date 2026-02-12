@@ -149,8 +149,7 @@ type StatsResponse struct {
 func (h *Handler) GetStats(c echo.Context) error {
 	_, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 
-	from := time.Now().AddDate(0, 0, -days).Truncate(24 * time.Hour)
-	to := time.Now().Add(24 * time.Hour).Truncate(24 * time.Hour)
+	from, to := periodTimeRange(days, hourly)
 
 	stats, err := h.store.GetStats(from, to, hourly, monthly)
 	if err != nil {
@@ -173,8 +172,7 @@ func (h *Handler) GetStats(c echo.Context) error {
 func (h *Handler) GetStatsFragment(c echo.Context) error {
 	_, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 
-	from := time.Now().AddDate(0, 0, -days).Truncate(24 * time.Hour)
-	to := time.Now().Add(24 * time.Hour).Truncate(24 * time.Hour)
+	from, to := periodTimeRange(days, hourly)
 
 	stats, err := h.store.GetStats(from, to, hourly, monthly)
 	if err != nil {
@@ -204,8 +202,7 @@ type BotStatsResponse struct {
 func (h *Handler) GetBotStats(c echo.Context) error {
 	_, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 
-	from := time.Now().AddDate(0, 0, -days).Truncate(24 * time.Hour)
-	to := time.Now().Add(24 * time.Hour).Truncate(24 * time.Hour)
+	from, to := periodTimeRange(days, hourly)
 
 	stats, err := h.store.GetBotStats(from, to, hourly, monthly)
 	if err != nil {
@@ -225,8 +222,7 @@ func (h *Handler) GetBotStats(c echo.Context) error {
 func (h *Handler) GetBotStatsFragment(c echo.Context) error {
 	_, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 
-	from := time.Now().AddDate(0, 0, -days).Truncate(24 * time.Hour)
-	to := time.Now().Add(24 * time.Hour).Truncate(24 * time.Hour)
+	from, to := periodTimeRange(days, hourly)
 
 	stats, err := h.store.GetBotStats(from, to, hourly, monthly)
 	if err != nil {
@@ -280,6 +276,22 @@ func parsePeriod(period string) (string, int, bool, bool) {
 	}
 
 	return period, days, hourly, monthly
+}
+
+// periodTimeRange computes the from/to time range for a given period.
+// For hourly (last 24 hours), it uses a rolling 24-hour window aligned to hour boundaries.
+// For other periods, it uses calendar day boundaries.
+func periodTimeRange(days int, hourly bool) (time.Time, time.Time) {
+	now := time.Now().UTC()
+	if hourly {
+		currentHour := now.Truncate(time.Hour)
+		from := currentHour.Add(-23 * time.Hour)
+		to := currentHour.Add(time.Hour)
+		return from, to
+	}
+	from := now.AddDate(0, 0, -days).Truncate(24 * time.Hour)
+	to := now.Add(24 * time.Hour).Truncate(24 * time.Hour)
+	return from, to
 }
 
 // convertStatsToViewModel converts analytics.Stats to templates.StatsViewModel
