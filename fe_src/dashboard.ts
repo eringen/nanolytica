@@ -14,7 +14,8 @@
 
   interface DashboardState {
     currentTab: DashboardTab;
-    currentPeriod: TimePeriod;
+    visitorPeriod: TimePeriod;
+    botPeriod: TimePeriod;
   }
 
   interface HtmxButton extends HTMLButtonElement {
@@ -41,7 +42,8 @@
 
   const state: DashboardState = {
     currentTab: 'visitors',
-    currentPeriod: 'week'
+    visitorPeriod: 'week',
+    botPeriod: 'week'
   };
 
   // ============================================================================
@@ -68,6 +70,18 @@
   // Tab Management
   // ============================================================================
 
+  function getCurrentPeriod(): TimePeriod {
+    return state.currentTab === 'bots' ? state.botPeriod : state.visitorPeriod;
+  }
+
+  function setCurrentPeriod(period: TimePeriod): void {
+    if (state.currentTab === 'bots') {
+      state.botPeriod = period;
+    } else {
+      state.visitorPeriod = period;
+    }
+  }
+
   function updateTabButtons(activeTab: DashboardTab): void {
     const buttons = getTabButtons();
     buttons.forEach(btn => {
@@ -79,19 +93,27 @@
   function updatePeriodButtons(tab: DashboardTab): void {
     const buttons = getPeriodButtons();
     const endpoint = tab === 'bots' ? ENDPOINTS.botStats : ENDPOINTS.stats;
-    
+    const activePeriod = tab === 'bots' ? state.botPeriod : state.visitorPeriod;
+
     buttons.forEach(btn => {
       const period = btn.dataset.period;
       if (period) {
         btn.setAttribute('hx-get', `${endpoint}?period=${period}`);
+        btn.classList.toggle('active', period === activePeriod);
       }
     });
+
+    // Re-process so HTMX picks up the updated hx-get attributes
+    const periodSelector = getPeriodSelector();
+    if (periodSelector && (window as any).htmx) {
+      (window as any).htmx.process(periodSelector);
+    }
   }
 
   function updatePeriodSelectorVisibility(tab: DashboardTab): void {
     const periodSelector = getPeriodSelector();
     if (!periodSelector) return;
-    
+
     if (tab === 'setup') {
       periodSelector.style.display = 'none';
     } else {
@@ -115,7 +137,7 @@
   }
 
   function setActivePeriod(period: TimePeriod): void {
-    state.currentPeriod = period;
+    setCurrentPeriod(period);
     const buttons = getPeriodButtons();
     buttons.forEach(btn => {
       const btnPeriod = btn.dataset.period;
@@ -152,15 +174,15 @@
 
   function handleHtmxAfterRequest(event: Event): void {
     if (!isHtmxAfterRequestEvent(event)) return;
-    
+
     const detail = event.detail as { target?: { id?: string } } | undefined;
     if (!detail?.target || detail.target.id !== 'content') return;
-    
+
     const activeBtn = getActivePeriodButton();
     if (activeBtn) {
       const period = activeBtn.dataset.period;
       if (period && isValidPeriod(period)) {
-        state.currentPeriod = period;
+        setCurrentPeriod(period);
       }
     }
   }
@@ -175,21 +197,21 @@
 
   function init(): void {
     if (!isBrowser()) return;
-    
+
     // Expose functions globally for inline onclick handlers
-    (window as Window & { 
+    (window as Window & {
       switchTab: typeof switchTab;
       setActivePeriod: typeof setActivePeriod;
       dashboard: { switchTab: typeof switchTab; setActivePeriod: typeof setActivePeriod };
     }).switchTab = switchTab;
-    
+
     (window as Window & { setActivePeriod: typeof setActivePeriod }).setActivePeriod = setActivePeriod;
-    
+
     (window as Window & { dashboard: { switchTab: typeof switchTab; setActivePeriod: typeof setActivePeriod } }).dashboard = {
       switchTab,
       setActivePeriod
     };
-    
+
     document.addEventListener('htmx:afterRequest', handleHtmxAfterRequest);
     startAutoRefresh();
   }

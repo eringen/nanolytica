@@ -388,7 +388,7 @@ SELECT path, timestamp, browser
 FROM visits
 WHERE timestamp >= ? AND timestamp < ?
 ORDER BY timestamp DESC
-LIMIT 5
+LIMIT 10
 `
 
 type LatestPagesRow struct {
