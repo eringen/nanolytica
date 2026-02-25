@@ -70,10 +70,6 @@
   // Tab Management
   // ============================================================================
 
-  function getCurrentPeriod(): TimePeriod {
-    return state.currentTab === 'bots' ? state.botPeriod : state.visitorPeriod;
-  }
-
   function setCurrentPeriod(period: TimePeriod): void {
     if (state.currentTab === 'bots') {
       state.botPeriod = period;
