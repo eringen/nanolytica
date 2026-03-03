@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strconv"
 	"sync"
 	"time"
@@ -12,10 +13,20 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+const (
+	writeQueueSize  = 4096            // buffered channel capacity
+	writeBatchSize  = 100             // flush after this many items
+	writeFlushDelay = 100 * time.Millisecond // flush after this delay
+)
+
 // Store provides database operations for analytics.
 type Store struct {
-	db *sql.DB
-	q  *sqlcgen.Queries
+	db         *sql.DB
+	q          *sqlcgen.Queries
+	visitCh    chan *Visit
+	botVisitCh chan *BotVisit
+	stopWriter chan struct{}
+	writerDone sync.WaitGroup
 }
 
 // StoreConfig holds optional configuration for the database connection pool.
@@ -77,8 +88,11 @@ func NewStoreWithConfig(dbPath string, cfg StoreConfig) (*Store, error) {
 	}
 
 	s := &Store{
-		db: db,
-		q:  sqlcgen.New(db),
+		db:         db,
+		q:          sqlcgen.New(db),
+		visitCh:    make(chan *Visit, writeQueueSize),
+		botVisitCh: make(chan *BotVisit, writeQueueSize),
+		stopWriter: make(chan struct{}),
 	}
 	if err := s.ensureSchema(); err != nil {
 		return nil, fmt.Errorf("ensure schema: %w", err)
@@ -87,11 +101,15 @@ func NewStoreWithConfig(dbPath string, cfg StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
+	s.startWriteQueue()
+
 	return s, nil
 }
 
-// Close closes the database connection.
+// Close stops the write queue, flushes remaining items, then closes the database.
 func (s *Store) Close() error {
+	close(s.stopWriter)
+	s.writerDone.Wait()
 	return s.db.Close()
 }
 
@@ -210,6 +228,137 @@ func (s *Store) SaveBotVisit(bv *BotVisit) error {
 		Path:      bv.Path,
 		Timestamp: bv.Timestamp.UTC(),
 	})
+}
+
+// EnqueueVisit adds a visit to the async write queue. Non-blocking; drops if queue is full.
+func (s *Store) EnqueueVisit(v *Visit) {
+	select {
+	case s.visitCh <- v:
+	default:
+		// Queue full — drop to avoid blocking the HTTP handler.
+		// This is acceptable for analytics data.
+	}
+}
+
+// EnqueueBotVisit adds a bot visit to the async write queue. Non-blocking; drops if queue is full.
+func (s *Store) EnqueueBotVisit(bv *BotVisit) {
+	select {
+	case s.botVisitCh <- bv:
+	default:
+	}
+}
+
+// startWriteQueue launches a background goroutine that batches and inserts visits.
+func (s *Store) startWriteQueue() {
+	s.writerDone.Add(1)
+	go func() {
+		defer s.writerDone.Done()
+
+		visits := make([]*Visit, 0, writeBatchSize)
+		botVisits := make([]*BotVisit, 0, writeBatchSize)
+		ticker := time.NewTicker(writeFlushDelay)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case v := <-s.visitCh:
+				visits = append(visits, v)
+				if len(visits) >= writeBatchSize {
+					s.flushVisits(visits)
+					visits = visits[:0]
+				}
+			case bv := <-s.botVisitCh:
+				botVisits = append(botVisits, bv)
+				if len(botVisits) >= writeBatchSize {
+					s.flushBotVisits(botVisits)
+					botVisits = botVisits[:0]
+				}
+			case <-ticker.C:
+				if len(visits) > 0 {
+					s.flushVisits(visits)
+					visits = visits[:0]
+				}
+				if len(botVisits) > 0 {
+					s.flushBotVisits(botVisits)
+					botVisits = botVisits[:0]
+				}
+			case <-s.stopWriter:
+				// Drain remaining items from channels
+				for {
+					select {
+					case v := <-s.visitCh:
+						visits = append(visits, v)
+					case bv := <-s.botVisitCh:
+						botVisits = append(botVisits, bv)
+					default:
+						if len(visits) > 0 {
+							s.flushVisits(visits)
+						}
+						if len(botVisits) > 0 {
+							s.flushBotVisits(botVisits)
+						}
+						return
+					}
+				}
+			}
+		}
+	}()
+}
+
+// flushVisits batch-inserts visits in a single transaction.
+func (s *Store) flushVisits(visits []*Visit) {
+	ctx := context.Background()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		log.Printf("write queue: begin tx: %v", err)
+		return
+	}
+	q := s.q.WithTx(tx)
+	for _, v := range visits {
+		if err := q.InsertVisit(ctx, sqlcgen.InsertVisitParams{
+			VisitorID:   v.VisitorID,
+			SessionID:   v.SessionID,
+			IpHash:      v.IPHash,
+			Browser:     v.Browser,
+			Os:          v.OS,
+			Device:      v.Device,
+			Path:        v.Path,
+			Referrer:    sql.NullString{String: v.Referrer, Valid: true},
+			ScreenSize:  sql.NullString{String: v.ScreenSize, Valid: true},
+			Timestamp:   v.Timestamp.UTC(),
+			DurationSec: sql.NullInt64{Int64: int64(v.DurationSec), Valid: true},
+		}); err != nil {
+			log.Printf("write queue: insert visit: %v", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("write queue: commit visits: %v", err)
+	}
+}
+
+// flushBotVisits batch-inserts bot visits in a single transaction.
+func (s *Store) flushBotVisits(botVisits []*BotVisit) {
+	ctx := context.Background()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		log.Printf("write queue: begin tx: %v", err)
+		return
+	}
+	q := s.q.WithTx(tx)
+	for _, bv := range botVisits {
+		if err := q.InsertBotVisit(ctx, sqlcgen.InsertBotVisitParams{
+			BotName:   bv.BotName,
+			IpHash:    bv.IPHash,
+			UserAgent: bv.UserAgent,
+			Path:      bv.Path,
+			Timestamp: bv.Timestamp.UTC(),
+		}); err != nil {
+			log.Printf("write queue: insert bot visit: %v", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("write queue: commit bot visits: %v", err)
+	}
 }
 
 // GetStats returns aggregated statistics for the given time period.

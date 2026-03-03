@@ -108,16 +108,13 @@ func (h *Handler) Collect(c echo.Context) error {
 
 	// Handle bot visits separately
 	if IsBot(userAgent) {
-		botVisit := &BotVisit{
+		h.store.EnqueueBotVisit(&BotVisit{
 			BotName:   ExtractBotName(userAgent),
 			IPHash:    HashIP(ip),
 			UserAgent: userAgent,
 			Path:      req.Path,
 			Timestamp: time.Now().UTC(),
-		}
-		if err := h.store.SaveBotVisit(botVisit); err != nil {
-			c.Logger().Errorf("Failed to save bot visit: %v", err)
-		}
+		})
 		return c.NoContent(http.StatusNoContent)
 	}
 
@@ -130,8 +127,8 @@ func (h *Handler) Collect(c echo.Context) error {
 	// Clean referrer
 	referrer := CleanReferrer(req.Referrer)
 
-	// Create visit
-	visit := &Visit{
+	// Enqueue visit for async batch insert
+	h.store.EnqueueVisit(&Visit{
 		VisitorID:   visitorID,
 		SessionID:   generateSessionID(visitorID),
 		IPHash:      HashIP(ip),
@@ -143,12 +140,7 @@ func (h *Handler) Collect(c echo.Context) error {
 		ScreenSize:  req.ScreenSize,
 		Timestamp:   time.Now().UTC(),
 		DurationSec: req.DurationSec,
-	}
-
-	// Save to database
-	if err := h.store.SaveVisit(visit); err != nil {
-		c.Logger().Errorf("Failed to save visit: %v", err)
-	}
+	})
 
 	return c.NoContent(http.StatusNoContent)
 }
