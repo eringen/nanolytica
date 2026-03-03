@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -23,7 +24,18 @@ import (
 func main() {
 	// Initialize analytics store
 	dbPath := getEnv("NANOLYTICA_DB_PATH", "data/nanolytica.db")
-	store, err := analytics.NewStore(dbPath)
+	dbCfg := analytics.DefaultStoreConfig()
+	if v := os.Getenv("NANOLYTICA_DB_MAX_OPEN_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			dbCfg.MaxOpenConns = n
+		}
+	}
+	if v := os.Getenv("NANOLYTICA_DB_MAX_IDLE_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			dbCfg.MaxIdleConns = n
+		}
+	}
+	store, err := analytics.NewStoreWithConfig(dbPath, dbCfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize analytics store: %v", err)
 	}
