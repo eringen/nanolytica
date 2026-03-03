@@ -197,55 +197,159 @@ func ParseUserAgent(ua string) (browser, os, device string) {
 	return
 }
 
+// botPatternsList contains all patterns used to detect bots/crawlers.
+// Matched against lowercased User-Agent strings.
+var botPatternsList = []string{
+	// Generic patterns
+	"bot", "crawler", "spider", "crawl", "slurp", "scrape",
+
+	// Search engines
+	"googlebot", "bingbot", "yandex", "baidu", "duckduckbot",
+	"sogou", "exabot", "applebot", "petalbot",
+
+	// Social media
+	"facebookexternalhit", "twitterbot", "linkedinbot",
+	"whatsapp", "telegrambot", "discordbot", "slackbot",
+
+	// SEO tools
+	"ahrefsbot", "semrushbot", "mj12bot", "dotbot", "rogerbot",
+	"screaming frog",
+
+	// AI crawlers
+	"gptbot", "chatgpt-user", "claudebot", "anthropic",
+	"ccbot", "bytespider", "cohere-ai", "perplexitybot",
+
+	// Archivers
+	"ia_archiver", "archive.org_bot",
+
+	// HTTP clients and libraries
+	"curl/", "wget/", "python-requests", "python-urllib",
+	"go-http-client", "node-fetch", "axios/", "httpx",
+	"java/", "okhttp", "apache-httpclient", "libwww-perl",
+	"postman", "insomnia",
+
+	// Headless browsers and automation
+	"headlesschrome", "phantomjs", "selenium", "puppeteer",
+	"playwright",
+
+	// Load testing and monitoring
+	"apachebench", "siege", "wrk", "locust", "k6/",
+	"uptimerobot", "pingdom", "statuscake", "datadog",
+	"newrelic", "site24x7",
+}
+
 // IsBot checks if the User-Agent is likely a bot/crawler.
 func IsBot(ua string) bool {
 	ua = strings.ToLower(ua)
-	bots := []string{
-		"bot", "crawler", "spider", "crawl", "slurp", "scrape",
-		"googlebot", "bingbot", "yandex", "baidu", "duckduckbot",
-		"facebookexternalhit", "twitterbot", "linkedinbot",
-		"ahrefsbot", "semrushbot", "mj12bot", "dotbot",
-	}
-	for _, bot := range bots {
-		if strings.Contains(ua, bot) {
+	for _, pattern := range botPatternsList {
+		if strings.Contains(ua, pattern) {
 			return true
 		}
 	}
 	return false
 }
 
+// knownBots maps UA substrings to display names, checked in order.
+// More specific patterns must come before generic ones.
+var knownBots = []struct {
+	pattern string
+	name    string
+}{
+	// Search engines
+	{"googlebot", "Googlebot"},
+	{"bingbot", "Bingbot"},
+	{"yandex", "Yandex"},
+	{"baidu", "Baidu"},
+	{"duckduckbot", "DuckDuckBot"},
+	{"sogou", "Sogou"},
+	{"exabot", "Exabot"},
+	{"applebot", "Applebot"},
+	{"petalbot", "PetalBot"},
+	{"slurp", "Yahoo Slurp"},
+
+	// Social media
+	{"facebookexternalhit", "Facebook"},
+	{"twitterbot", "Twitterbot"},
+	{"linkedinbot", "LinkedIn"},
+	{"whatsapp", "WhatsApp"},
+	{"telegrambot", "Telegram"},
+	{"discordbot", "Discord"},
+	{"slackbot", "Slack"},
+
+	// SEO tools
+	{"ahrefsbot", "Ahrefs"},
+	{"semrushbot", "SEMrush"},
+	{"mj12bot", "Majestic"},
+	{"dotbot", "Moz"},
+	{"rogerbot", "Moz"},
+	{"screaming frog", "Screaming Frog"},
+
+	// AI crawlers
+	{"gptbot", "GPTBot"},
+	{"chatgpt-user", "ChatGPT"},
+	{"claudebot", "ClaudeBot"},
+	{"anthropic", "Anthropic"},
+	{"ccbot", "Common Crawl"},
+	{"bytespider", "ByteSpider"},
+	{"cohere-ai", "Cohere"},
+	{"perplexitybot", "Perplexity"},
+
+	// Archivers
+	{"ia_archiver", "Internet Archive"},
+	{"archive.org_bot", "Internet Archive"},
+
+	// HTTP clients
+	{"curl/", "curl"},
+	{"wget/", "wget"},
+	{"python-requests", "Python Requests"},
+	{"python-urllib", "Python urllib"},
+	{"go-http-client", "Go HTTP"},
+	{"node-fetch", "Node Fetch"},
+	{"axios/", "Axios"},
+	{"httpx", "HTTPX"},
+	{"java/", "Java HTTP"},
+	{"okhttp", "OkHttp"},
+	{"apache-httpclient", "Apache HC"},
+	{"libwww-perl", "libwww-perl"},
+	{"postman", "Postman"},
+	{"insomnia", "Insomnia"},
+
+	// Headless/automation
+	{"headlesschrome", "Headless Chrome"},
+	{"phantomjs", "PhantomJS"},
+	{"selenium", "Selenium"},
+	{"puppeteer", "Puppeteer"},
+	{"playwright", "Playwright"},
+
+	// Load testing
+	{"apachebench", "ApacheBench"},
+	{"siege", "Siege"},
+	{"wrk", "wrk"},
+	{"locust", "Locust"},
+	{"k6/", "k6"},
+
+	// Monitoring
+	{"uptimerobot", "UptimeRobot"},
+	{"pingdom", "Pingdom"},
+	{"statuscake", "StatusCake"},
+	{"datadog", "Datadog"},
+	{"newrelic", "New Relic"},
+	{"site24x7", "Site24x7"},
+
+	// Generic (must be last)
+	{"crawler", "Generic Crawler"},
+	{"spider", "Generic Spider"},
+	{"bot", "Other Bot"},
+}
+
 // ExtractBotName extracts the bot name from User-Agent string.
 func ExtractBotName(ua string) string {
 	ua = strings.ToLower(ua)
 
-	// Known bot patterns
-	botPatterns := map[string]string{
-		"googlebot":           "Googlebot",
-		"bingbot":             "Bingbot",
-		"yandex":              "Yandex",
-		"baidu":               "Baidu",
-		"duckduckbot":         "DuckDuckBot",
-		"facebookexternalhit": "Facebook",
-		"twitterbot":          "Twitterbot",
-		"linkedinbot":         "LinkedIn",
-		"ahrefsbot":           "Ahrefs",
-		"semrushbot":          "SEMrush",
-		"mj12bot":             "Majestic",
-		"dotbot":              "Moz",
-		"slurp":               "Yahoo Slurp",
-		"crawler":             "Generic Crawler",
-		"spider":              "Generic Spider",
-	}
-
-	for pattern, name := range botPatterns {
-		if strings.Contains(ua, pattern) {
-			return name
+	for _, b := range knownBots {
+		if strings.Contains(ua, b.pattern) {
+			return b.name
 		}
-	}
-
-	// Generic bot detection
-	if strings.Contains(ua, "bot") {
-		return "Other Bot"
 	}
 
 	return "Unknown"
