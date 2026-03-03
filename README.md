@@ -24,12 +24,15 @@ Dashboard: `http://localhost:8080/admin/analytics/`
 ## Features
 
 - **Privacy-first** -- no cookies, no localStorage, honors DNT
-- **Bot detection** -- 15+ crawlers identified and separated
+- **Bot detection** -- 55+ patterns covering search engines, AI crawlers, HTTP clients, headless browsers, monitoring tools
 - **Browser/OS/device breakdowns**, referrer tracking, time on page
 - **Real-time** -- live visitor count (last 5 minutes)
 - **Single binary** (~10MB) -- all assets embedded, SQLite with WAL mode, zero external dependencies
 - **HTMX dashboard** -- server-rendered HTML fragments, minimal client JS
 - **Type-safe templates** via [templ](https://templ.guide/)
+- **Rate limiting** -- per-IP rate limiting on the collect endpoint (5 req/s, burst 10)
+- **Gzip compression** -- all responses compressed automatically
+- **Data export** -- CSV export for visitor and bot stats
 - **Docker ready** -- multi-stage build, non-root runtime
 
 ## Installation
@@ -94,8 +97,11 @@ services:
 | `NANOLYTICA_DB_PATH` | `data/nanolytica.db` | SQLite database path |
 | `NANOLYTICA_USERNAME` | *(none)* | Dashboard username |
 | `NANOLYTICA_PASSWORD` | *(none)* | Dashboard password |
+| `NANOLYTICA_CORS_ORIGINS` | `*` | Allowed CORS origins (comma-separated, or `*` for all) |
+| `NANOLYTICA_DB_MAX_OPEN_CONNS` | `10` | Max open database connections |
+| `NANOLYTICA_DB_MAX_IDLE_CONNS` | `5` | Max idle database connections |
 
-If no credentials are set, the dashboard is publicly accessible (warning logged on startup).
+If no credentials are set, a random password is generated and logged on startup.
 
 ## API
 
@@ -105,7 +111,7 @@ If no credentials are set, the dashboard is publicly accessible (warning logged 
 |--------|----------|-------------|
 | `GET` | `/health` | Health check (JSON) |
 | `GET` | `/nanolytica.js` | Tracking script |
-| `POST` | `/api/analytics/collect` | Collect page view (respects DNT, returns 204) |
+| `POST` | `/api/analytics/collect` | Collect page view (respects DNT, rate-limited, returns 204) |
 
 ### Admin (authenticated)
 
@@ -114,6 +120,8 @@ If no credentials are set, the dashboard is publicly accessible (warning logged 
 | `GET` | `/admin/analytics/` | Dashboard |
 | `GET` | `/admin/analytics/api/stats?period=week` | Visitor stats (JSON) |
 | `GET` | `/admin/analytics/api/bot-stats?period=week` | Bot stats (JSON) |
+| `GET` | `/admin/analytics/api/export/stats?period=week` | Visitor stats (CSV download) |
+| `GET` | `/admin/analytics/api/export/bot-stats?period=week` | Bot stats (CSV download) |
 | `GET` | `/admin/analytics/fragments/stats?period=week` | Visitor stats (HTML fragment) |
 | `GET` | `/admin/analytics/fragments/bot-stats?period=week` | Bot stats (HTML fragment) |
 | `GET` | `/admin/analytics/fragments/setup` | Setup instructions (HTML fragment) |
@@ -141,6 +149,7 @@ Client                          Server
   |                               |
   |-- POST /collect ------------->|  Echo HTTP server
   |                               |    -> parse UA, detect bots, hash IP
+  |                               |    -> rate limit (5 req/s per IP)
   |                               |    -> store in SQLite (WAL mode)
   |                               |
   |-- GET /admin/analytics/ ----->|  HTMX dashboard
@@ -175,6 +184,7 @@ make test       # verify
 `store.go` is a thin wrapper that delegates to the generated `sqlcgen.Queries` methods and converts between internal types and sqlc-generated types.
 
 ```sql
+-- Single-column indexes
 CREATE INDEX idx_visits_timestamp ON visits(timestamp);
 CREATE INDEX idx_visits_visitor_id ON visits(visitor_id);
 CREATE INDEX idx_visits_path ON visits(path);
@@ -183,6 +193,11 @@ CREATE INDEX idx_visits_os ON visits(os);
 CREATE INDEX idx_visits_device ON visits(device);
 CREATE INDEX idx_bot_visits_timestamp ON bot_visits(timestamp);
 CREATE INDEX idx_bot_visits_name ON bot_visits(bot_name);
+
+-- Composite indexes for common queries
+CREATE INDEX idx_visits_ts_path ON visits(timestamp, path);
+CREATE INDEX idx_visits_ts_visitor ON visits(timestamp, visitor_id);
+CREATE INDEX idx_bot_visits_ts_path ON bot_visits(timestamp, path);
 ```
 
 ## Development
@@ -297,24 +312,17 @@ analytics.example.com {
 }
 ```
 
-Rate limiting is not built-in. Use your reverse proxy:
-
-```nginx
-limit_req_zone $binary_remote_addr zone=analytics:10m rate=10r/s;
-location /api/analytics/collect {
-    limit_req zone=analytics burst=20 nodelay;
-    proxy_pass http://localhost:8080;
-}
-```
-
 ## Security
 
 - Salted SHA-256 IP hashing (per-installation random salt)
 - Constant-time password comparison
+- Per-IP rate limiting on collect endpoint (5 req/s, burst 10)
+- Configurable CORS origins (`NANOLYTICA_CORS_ORIGINS`)
 - CORS scoped to public endpoints only
 - Security headers: XSS protection, Content-Type nosniff, X-Frame-Options DENY
 - Type-safe SQL via [sqlc](https://sqlc.dev/) -- no hand-written query strings
-- Request body size limit (10KB)
+- Input validation: path length, screen size format, duration range, body size limit (10KB)
+- Gzip compression on all responses
 - Docker runs as non-root user
 - Graceful shutdown on SIGINT/SIGTERM
 
