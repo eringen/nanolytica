@@ -52,6 +52,8 @@ func main() {
 		Format: "${time_rfc3339} ${method} ${uri} ${status} ${latency_human}\n",
 	}))
 
+	e.Use(middleware.Gzip())
+
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
