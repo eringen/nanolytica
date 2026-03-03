@@ -18,16 +18,47 @@ type Store struct {
 	q  *sqlcgen.Queries
 }
 
-// NewStore creates a new analytics store.
+// StoreConfig holds optional configuration for the database connection pool.
+type StoreConfig struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+}
+
+// DefaultStoreConfig returns sensible defaults for the connection pool.
+func DefaultStoreConfig() StoreConfig {
+	return StoreConfig{
+		MaxOpenConns:    10,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: time.Hour,
+	}
+}
+
+// NewStore creates a new analytics store with default connection pool settings.
 func NewStore(dbPath string) (*Store, error) {
+	return NewStoreWithConfig(dbPath, DefaultStoreConfig())
+}
+
+// NewStoreWithConfig creates a new analytics store with the given configuration.
+func NewStoreWithConfig(dbPath string, cfg StoreConfig) (*Store, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open analytics db: %w", err)
 	}
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(time.Hour)
+	if cfg.MaxOpenConns <= 0 {
+		cfg.MaxOpenConns = 10
+	}
+	if cfg.MaxIdleConns <= 0 {
+		cfg.MaxIdleConns = 5
+	}
+	if cfg.ConnMaxLifetime <= 0 {
+		cfg.ConnMaxLifetime = time.Hour
+	}
+
+	db.SetMaxOpenConns(cfg.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 
 	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
 		return nil, fmt.Errorf("enable WAL: %w", err)
