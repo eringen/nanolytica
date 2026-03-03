@@ -2,10 +2,12 @@ package analytics
 
 import (
 	"crypto/sha256"
+	"encoding/csv"
 	"encoding/hex"
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/eringen/nanolytica/analytics/templates"
@@ -424,6 +426,130 @@ func generateSessionID(visitorID string) string {
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
+// ExportStatsCSV returns visitor stats as a CSV download.
+func (h *Handler) ExportStatsCSV(c echo.Context) error {
+	period, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
+	from, to := periodTimeRange(days, hourly)
+
+	stats, err := h.store.GetStats(from, to, hourly, monthly)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "Failed to export stats")
+	}
+
+	c.Response().Header().Set("Content-Type", "text/csv")
+	c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=visitors_%s.csv", period))
+	c.Response().WriteHeader(http.StatusOK)
+
+	w := csv.NewWriter(c.Response())
+
+	// Summary
+	w.Write([]string{"# Summary"})
+	w.Write([]string{"Period", stats.Period})
+	w.Write([]string{"Unique Visitors", strconv.Itoa(stats.UniqueVisitors)})
+	w.Write([]string{"Total Views", strconv.Itoa(stats.TotalViews)})
+	w.Write([]string{"Avg Duration (sec)", strconv.Itoa(stats.AvgDuration)})
+	w.Write([]string{})
+
+	// Views over time
+	w.Write([]string{"# Views Over Time"})
+	w.Write([]string{"Date", "Views"})
+	for _, v := range stats.DailyViews {
+		w.Write([]string{v.Date, strconv.Itoa(v.Views)})
+	}
+	w.Write([]string{})
+
+	// Top pages
+	w.Write([]string{"# Top Pages"})
+	w.Write([]string{"Path", "Views"})
+	for _, p := range stats.TopPages {
+		w.Write([]string{p.Path, strconv.Itoa(p.Views)})
+	}
+	w.Write([]string{})
+
+	// Browsers
+	w.Write([]string{"# Browsers"})
+	w.Write([]string{"Browser", "Count"})
+	for _, s := range stats.BrowserStats {
+		w.Write([]string{s.Name, strconv.Itoa(s.Count)})
+	}
+	w.Write([]string{})
+
+	// Operating Systems
+	w.Write([]string{"# Operating Systems"})
+	w.Write([]string{"OS", "Count"})
+	for _, s := range stats.OSStats {
+		w.Write([]string{s.Name, strconv.Itoa(s.Count)})
+	}
+	w.Write([]string{})
+
+	// Devices
+	w.Write([]string{"# Devices"})
+	w.Write([]string{"Device", "Count"})
+	for _, s := range stats.DeviceStats {
+		w.Write([]string{s.Name, strconv.Itoa(s.Count)})
+	}
+	w.Write([]string{})
+
+	// Referrers
+	w.Write([]string{"# Referrers"})
+	w.Write([]string{"Referrer", "Count"})
+	for _, s := range stats.ReferrerStats {
+		w.Write([]string{s.Name, strconv.Itoa(s.Count)})
+	}
+
+	w.Flush()
+	return nil
+}
+
+// ExportBotStatsCSV returns bot stats as a CSV download.
+func (h *Handler) ExportBotStatsCSV(c echo.Context) error {
+	period, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
+	from, to := periodTimeRange(days, hourly)
+
+	stats, err := h.store.GetBotStats(from, to, hourly, monthly)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "Failed to export bot stats")
+	}
+
+	c.Response().Header().Set("Content-Type", "text/csv")
+	c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=bots_%s.csv", period))
+	c.Response().WriteHeader(http.StatusOK)
+
+	w := csv.NewWriter(c.Response())
+
+	// Summary
+	w.Write([]string{"# Summary"})
+	w.Write([]string{"Period", stats.Period})
+	w.Write([]string{"Total Bot Visits", strconv.Itoa(stats.TotalVisits)})
+	w.Write([]string{})
+
+	// Bot visits over time
+	w.Write([]string{"# Bot Visits Over Time"})
+	w.Write([]string{"Date", "Visits"})
+	for _, v := range stats.DailyVisits {
+		w.Write([]string{v.Date, strconv.Itoa(v.Views)})
+	}
+	w.Write([]string{})
+
+	// Top bots
+	w.Write([]string{"# Top Bots"})
+	w.Write([]string{"Bot", "Count"})
+	for _, b := range stats.TopBots {
+		w.Write([]string{b.Name, strconv.Itoa(b.Count)})
+	}
+	w.Write([]string{})
+
+	// Top pages
+	w.Write([]string{"# Top Pages"})
+	w.Write([]string{"Path", "Views"})
+	for _, p := range stats.TopPages {
+		w.Write([]string{p.Path, strconv.Itoa(p.Views)})
+	}
+
+	w.Flush()
+	return nil
+}
+
 // RegisterRoutes registers analytics routes with the Echo router.
 func (h *Handler) RegisterRoutes(e *echo.Echo, publicGroup *echo.Group, authMiddleware echo.MiddlewareFunc) {
 	// Rate limit the collect endpoint: 5 req/s per IP, burst of 10
@@ -447,6 +573,10 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, publicGroup *echo.Group, authMidd
 	admin.Use(authMiddleware)
 	admin.GET("/api/stats", h.GetStats)
 	admin.GET("/api/bot-stats", h.GetBotStats)
+
+	// CSV export endpoints
+	admin.GET("/api/export/stats", h.ExportStatsCSV)
+	admin.GET("/api/export/bot-stats", h.ExportBotStatsCSV)
 
 	// Admin fragment endpoints (HTML for htmx)
 	admin.GET("/fragments/stats", h.GetStatsFragment)
