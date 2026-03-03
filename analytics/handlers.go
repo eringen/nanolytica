@@ -18,6 +18,10 @@ import (
 // screenSizeRegex validates screen size format (e.g., "1920x1080").
 var screenSizeRegex = regexp.MustCompile(`^\d{1,5}x\d{1,5}$`)
 
+// pathRegex validates URL path content. Allows printable ASCII and UTF-8,
+// rejects control characters and null bytes.
+var pathRegex = regexp.MustCompile(`^[^\x00-\x1f\x7f]*$`)
+
 // Handler handles analytics HTTP requests.
 type Handler struct {
 	store *Store
@@ -50,6 +54,9 @@ const (
 func validateCollectRequest(req *CollectRequest) error {
 	if len(req.Path) > maxPathLen {
 		return fmt.Errorf("path exceeds maximum length of %d", maxPathLen)
+	}
+	if req.Path != "" && !pathRegex.MatchString(req.Path) {
+		return fmt.Errorf("path contains invalid characters")
 	}
 	if len(req.Referrer) > maxReferrerLen {
 		return fmt.Errorf("referrer exceeds maximum length of %d", maxReferrerLen)

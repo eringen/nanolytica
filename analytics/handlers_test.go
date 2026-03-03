@@ -40,6 +40,40 @@ func TestValidateCollectRequest_PathTooLong(t *testing.T) {
 	}
 }
 
+func TestValidateCollectRequest_PathValid(t *testing.T) {
+	valid := []string{
+		"", "/", "/blog/hello-world", "/path/to/page",
+		"/search?q=test&page=1", "/café", "/日本語",
+		"/path/with spaces", "/path%20encoded",
+		"/blog/hello-world#section", "/path/with~tilde",
+		"/path/with.dots/file.html",
+	}
+	for _, p := range valid {
+		req := &CollectRequest{Path: p}
+		if err := validateCollectRequest(req); err != nil {
+			t.Errorf("expected path %q to be valid, got: %v", p, err)
+		}
+	}
+}
+
+func TestValidateCollectRequest_PathInvalid(t *testing.T) {
+	invalid := []string{
+		"/path\x00with-null",
+		"/path\x01control",
+		"/path\x1fchar",
+		"/path\x7fdelete",
+		"hello\ttab",
+		"hello\nnewline",
+		"hello\rreturn",
+	}
+	for _, p := range invalid {
+		req := &CollectRequest{Path: p}
+		if err := validateCollectRequest(req); err == nil {
+			t.Errorf("expected path %q to be invalid", p)
+		}
+	}
+}
+
 func TestValidateCollectRequest_ReferrerTooLong(t *testing.T) {
 	req := &CollectRequest{
 		Path:     "/",
