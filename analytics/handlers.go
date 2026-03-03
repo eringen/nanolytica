@@ -5,12 +5,16 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/eringen/nanolytica/analytics/templates"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
+
+// screenSizeRegex validates screen size format (e.g., "1920x1080").
+var screenSizeRegex = regexp.MustCompile(`^\d{1,5}x\d{1,5}$`)
 
 // Handler handles analytics HTTP requests.
 type Handler struct {
@@ -50,6 +54,9 @@ func validateCollectRequest(req *CollectRequest) error {
 	}
 	if len(req.ScreenSize) > maxScreenSizeLen {
 		return fmt.Errorf("screen_size exceeds maximum length of %d", maxScreenSizeLen)
+	}
+	if req.ScreenSize != "" && !screenSizeRegex.MatchString(req.ScreenSize) {
+		return fmt.Errorf("screen_size must match format WIDTHxHEIGHT (e.g., 1920x1080)")
 	}
 	if len(req.UserAgent) > maxUserAgentLen {
 		return fmt.Errorf("user_agent exceeds maximum length of %d", maxUserAgentLen)

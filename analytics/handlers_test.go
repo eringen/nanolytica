@@ -70,6 +70,26 @@ func TestValidateCollectRequest_UserAgentTooLong(t *testing.T) {
 	}
 }
 
+func TestValidateCollectRequest_ScreenSizeValid(t *testing.T) {
+	valid := []string{"", "1920x1080", "360x640", "1x1", "99999x99999"}
+	for _, ss := range valid {
+		req := &CollectRequest{Path: "/", ScreenSize: ss}
+		if err := validateCollectRequest(req); err != nil {
+			t.Errorf("expected %q to be valid, got: %v", ss, err)
+		}
+	}
+}
+
+func TestValidateCollectRequest_ScreenSizeInvalid(t *testing.T) {
+	invalid := []string{"garbage", "x", "1920", "1920x", "x1080", "abc x def", "1920X1080", "1920 x 1080", "-1x1080"}
+	for _, ss := range invalid {
+		req := &CollectRequest{Path: "/", ScreenSize: ss}
+		if err := validateCollectRequest(req); err == nil {
+			t.Errorf("expected %q to be invalid screen_size", ss)
+		}
+	}
+}
+
 func TestValidateCollectRequest_NegativeDuration(t *testing.T) {
 	req := &CollectRequest{
 		Path:        "/",
