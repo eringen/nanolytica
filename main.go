@@ -50,6 +50,10 @@ func main() {
 		log.Fatalf("Failed to initialize hash salt: %v", err)
 	}
 
+	// Start periodic cleanup of expired auth failure entries
+	stopAuthCleanup := startAuthCleanup()
+	defer stopAuthCleanup()
+
 	// Cache tracking script in memory
 	loadTrackingScript()
 
@@ -186,8 +190,9 @@ var authFailures = struct {
 }{attempts: make(map[string][]time.Time)}
 
 const (
-	maxAuthAttempts = 5
-	authWindowSec   = 300 // 5 minutes
+	maxAuthAttempts    = 5
+	authWindowSec      = 300 // 5 minutes
+	authCleanupInterval = 10 * time.Minute
 )
 
 // checkRateLimit returns true if the IP has exceeded the max failed auth attempts.
@@ -202,6 +207,10 @@ func checkRateLimit(ip string) bool {
 			recent = append(recent, t)
 		}
 	}
+	if len(recent) == 0 {
+		delete(authFailures.attempts, ip)
+		return false
+	}
 	authFailures.attempts[ip] = recent
 	return len(recent) >= maxAuthAttempts
 }
@@ -211,6 +220,48 @@ func recordAuthFailure(ip string) {
 	authFailures.Lock()
 	defer authFailures.Unlock()
 	authFailures.attempts[ip] = append(authFailures.attempts[ip], time.Now())
+}
+
+// startAuthCleanup periodically removes expired entries from the authFailures map.
+// Returns a stop function.
+func startAuthCleanup() func() {
+	ticker := time.NewTicker(authCleanupInterval)
+	done := make(chan struct{})
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				cleanupAuthFailures()
+			case <-done:
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+
+	return func() { close(done) }
+}
+
+// cleanupAuthFailures removes all entries with only expired timestamps.
+func cleanupAuthFailures() {
+	authFailures.Lock()
+	defer authFailures.Unlock()
+
+	cutoff := time.Now().Add(-time.Duration(authWindowSec) * time.Second)
+	for ip, times := range authFailures.attempts {
+		recent := times[:0]
+		for _, t := range times {
+			if t.After(cutoff) {
+				recent = append(recent, t)
+			}
+		}
+		if len(recent) == 0 {
+			delete(authFailures.attempts, ip)
+		} else {
+			authFailures.attempts[ip] = recent
+		}
+	}
 }
 
 // createAuthMiddleware creates basic auth middleware for dashboard.
