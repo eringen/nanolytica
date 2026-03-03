@@ -9,6 +9,7 @@ import (
 
 	"github.com/eringen/nanolytica/analytics/templates"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 // Handler handles analytics HTTP requests.
@@ -418,8 +419,21 @@ func generateSessionID(visitorID string) string {
 
 // RegisterRoutes registers analytics routes with the Echo router.
 func (h *Handler) RegisterRoutes(e *echo.Echo, publicGroup *echo.Group, authMiddleware echo.MiddlewareFunc) {
-	// Public endpoint for collecting analytics (with CORS)
-	publicGroup.POST("/api/analytics/collect", h.Collect)
+	// Rate limit the collect endpoint: 5 req/s per IP, burst of 10
+	collectRateLimiter := middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
+			middleware.RateLimiterMemoryStoreConfig{Rate: 5, Burst: 10, ExpiresIn: 5 * time.Minute},
+		),
+		IdentifierExtractor: func(c echo.Context) (string, error) {
+			return c.RealIP(), nil
+		},
+		DenyHandler: func(c echo.Context, identifier string, err error) error {
+			return c.NoContent(http.StatusTooManyRequests)
+		},
+	})
+
+	// Public endpoint for collecting analytics (with CORS + rate limit)
+	publicGroup.POST("/api/analytics/collect", h.Collect, collectRateLimiter)
 
 	// Admin API endpoints (JSON)
 	admin := e.Group("/admin/analytics")

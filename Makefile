@@ -1,11 +1,15 @@
-.PHONY: build run clean clean-data test docker templ assets assets-dev npm-install typecheck sqlc singlebinary
+.PHONY: build run clean clean-data test templ assets assets-dev npm-install typecheck sqlc \
+       singlebinary singlebinary-linux singlebinary-darwin singlebinary-windows singlebinary-all \
+       dev watch-ts docker-build docker-run \
+       build-linux build-darwin build-windows build-all \
+       prod setup check
 
 BINARY_NAME=nanolytica
 DOCKER_IMAGE=nanolytica
 
 # Regenerate sqlc type-safe query code
 sqlc:
-	cd analytics/sqlcgen && sqlc generate
+	cd analytics/sqlcgen && go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate
 
 # Default build target
 build: templ assets
@@ -42,6 +46,7 @@ run: build
 # Run with live reload (requires air)
 dev:
 	go run github.com/air-verse/air@latest -c .air.toml
+
 # Run tests
 test:
 	go test -v ./...
@@ -75,7 +80,7 @@ build-windows:
 build-all: build-linux build-darwin build-windows
 
 # Full production build
-prod: clean templ assets build
+prod: clean build
 	@echo "Production build complete: $(BINARY_NAME)"
 
 # Single binary build with embedded static assets (no external files needed)
