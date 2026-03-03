@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -66,8 +67,21 @@ func main() {
 	e.Use(middleware.BodyLimit("10K"))
 
 	// CORS scoped to public endpoints only (tracking script + collect + health)
+	// NANOLYTICA_CORS_ORIGINS restricts which sites can send analytics.
+	// Default "*" allows any origin (useful for multi-site tracking).
+	corsOrigins := getEnv("NANOLYTICA_CORS_ORIGINS", "*")
+	var allowedOrigins []string
+	if corsOrigins == "*" {
+		allowedOrigins = []string{"*"}
+	} else {
+		for _, o := range strings.Split(corsOrigins, ",") {
+			if o = strings.TrimSpace(o); o != "" {
+				allowedOrigins = append(allowedOrigins, o)
+			}
+		}
+	}
 	publicCORS := middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
+		AllowOrigins: allowedOrigins,
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
 		AllowHeaders: []string{echo.HeaderContentType},
 	})
