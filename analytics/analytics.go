@@ -14,8 +14,9 @@ import (
 
 // salt holds the per-installation random salt for IP hashing, protected by sync.Once.
 var salt struct {
-	once  sync.Once
-	value string
+	once        sync.Once
+	value       string
+	initialized bool
 }
 
 // InitSalt loads or generates a persistent salt for IP hashing.
@@ -41,12 +42,23 @@ func InitSalt(store *Store) error {
 			}
 		}
 		salt.value = s
+		salt.initialized = true
 	})
 	return initErr
 }
 
+// SaltInitialized reports whether InitSalt has been successfully called.
+func SaltInitialized() bool {
+	return salt.initialized
+}
+
 // getSalt returns the initialized salt value.
+// Panics if InitSalt was not called — this prevents silent privacy failures
+// where all IP hashes become deterministic across installations.
 func getSalt() string {
+	if !salt.initialized {
+		panic("analytics: getSalt called before InitSalt — IP hashing is not safe without a salt")
+	}
 	return salt.value
 }
 

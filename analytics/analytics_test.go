@@ -1,8 +1,16 @@
 package analytics
 
 import (
+	"os"
 	"testing"
 )
+
+// TestMain sets up a test salt so HashIP/GenerateVisitorID tests don't panic.
+func TestMain(m *testing.M) {
+	salt.value = "test-salt-for-unit-tests"
+	salt.initialized = true
+	os.Exit(m.Run())
+}
 
 // --- ParseUserAgent tests ---
 
@@ -255,6 +263,35 @@ func TestCleanReferrer_Domain(t *testing.T) {
 func TestCleanReferrer_DomainWithWWW(t *testing.T) {
 	if got := CleanReferrer("https://www.example.com/page"); got != "example.com" {
 		t.Errorf("expected example.com, got %s", got)
+	}
+}
+
+// --- Salt initialization tests ---
+
+func TestGetSalt_PanicsWithoutInit(t *testing.T) {
+	// Save and clear salt state
+	origValue := salt.value
+	origInit := salt.initialized
+	salt.value = ""
+	salt.initialized = false
+
+	defer func() {
+		// Restore salt state
+		salt.value = origValue
+		salt.initialized = origInit
+
+		r := recover()
+		if r == nil {
+			t.Fatal("expected getSalt to panic when salt is not initialized")
+		}
+	}()
+
+	getSalt()
+}
+
+func TestSaltInitialized(t *testing.T) {
+	if !SaltInitialized() {
+		t.Error("expected SaltInitialized() to return true after TestMain setup")
 	}
 }
 
