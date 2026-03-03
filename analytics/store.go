@@ -60,8 +60,20 @@ func NewStoreWithConfig(dbPath string, cfg StoreConfig) (*Store, error) {
 	db.SetMaxIdleConns(cfg.MaxIdleConns)
 	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 
-	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		return nil, fmt.Errorf("enable WAL: %w", err)
+	// SQLite performance PRAGMAs — order matters: journal_mode first, then the rest.
+	pragmas := []string{
+		"PRAGMA journal_mode=WAL;",             // concurrent reads
+		"PRAGMA synchronous=NORMAL;",           // safe with WAL, 2-5x faster writes
+		"PRAGMA busy_timeout=5000;",            // wait up to 5s for write lock instead of failing immediately
+		"PRAGMA cache_size=-20000;",            // 20MB page cache (default ~2MB)
+		"PRAGMA mmap_size=268435456;",          // 256MB memory-mapped I/O for faster reads
+		"PRAGMA temp_store=MEMORY;",            // keep temp tables in memory
+		"PRAGMA journal_size_limit=67108864;",  // cap WAL file at 64MB
+	}
+	for _, p := range pragmas {
+		if _, err := db.Exec(p); err != nil {
+			return nil, fmt.Errorf("set pragma %s: %w", p, err)
+		}
 	}
 
 	s := &Store{
