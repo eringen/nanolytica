@@ -86,8 +86,13 @@ func (s *Store) ensureSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_visits_os ON visits(os);
 		CREATE INDEX IF NOT EXISTS idx_visits_device ON visits(device);
 
+		CREATE INDEX IF NOT EXISTS idx_visits_ts_path ON visits(timestamp, path);
+		CREATE INDEX IF NOT EXISTS idx_visits_ts_visitor ON visits(timestamp, visitor_id);
+
 		CREATE INDEX IF NOT EXISTS idx_bot_visits_timestamp ON bot_visits(timestamp);
 		CREATE INDEX IF NOT EXISTS idx_bot_visits_name ON bot_visits(bot_name);
+
+		CREATE INDEX IF NOT EXISTS idx_bot_visits_ts_path ON bot_visits(timestamp, path);
 
 		CREATE TABLE IF NOT EXISTS settings (
 			key TEXT PRIMARY KEY,
