@@ -24,16 +24,21 @@ Dashboard: `http://localhost:8080/admin/analytics/`
 ## Features
 
 - **Privacy-first** -- no cookies, no localStorage, honors DNT
+- **Active engagement time** -- tracks actual time on page (pauses when tab is hidden or unfocused)
+- **Scroll depth** -- tracks how far visitors scroll down each page
 - **Bot detection** -- 55+ patterns covering search engines, AI crawlers, HTTP clients, headless browsers, monitoring tools
-- **Browser/OS/device breakdowns**, referrer tracking, time on page
+- **Browser/OS/device breakdowns**, referrer tracking
 - **Real-time** -- live visitor count (last 5 minutes)
 - **Single binary** (~10MB) -- all assets embedded, SQLite with WAL mode, zero external dependencies
-- **HTMX dashboard** -- server-rendered HTML fragments, minimal client JS
+- **talkDOM dashboard** -- server-rendered HTML fragments via [talkDOM](https://github.com/eringen/talkdom), minimal client JS
+- **Login page** -- session-based authentication with HMAC-signed cookies (no browser Basic Auth popup)
 - **Type-safe templates** via [templ](https://templ.guide/)
-- **Rate limiting** -- per-IP rate limiting on the collect endpoint (5 req/s, burst 10)
+- **Rate limiting** -- per-IP rate limiting on collect endpoint (5 req/s, burst 10) and login (5 attempts per 5 minutes)
+- **Strict CSP** -- `script-src 'self'`, no inline scripts, no `unsafe-inline`
 - **Gzip compression** -- all responses compressed automatically
 - **Data export** -- CSV export for visitor and bot stats
 - **Docker ready** -- multi-stage build, non-root runtime
+- **Client-side filtering** -- skips localhost, automated browsers (Selenium, Puppeteer, Cypress, PhantomJS)
 
 ## Installation
 
@@ -97,6 +102,7 @@ services:
 | `NANOLYTICA_DB_PATH` | `data/nanolytica.db` | SQLite database path |
 | `NANOLYTICA_USERNAME` | *(none)* | Dashboard username |
 | `NANOLYTICA_PASSWORD` | *(none)* | Dashboard password |
+| `COOKIE_SECURE` | `false` | Set to `true` for HTTPS (enables Secure flag on session cookie) |
 | `NANOLYTICA_CORS_ORIGINS` | `*` | Allowed CORS origins (comma-separated, or `*` for all) |
 | `NANOLYTICA_DB_MAX_OPEN_CONNS` | `10` | Max open database connections |
 | `NANOLYTICA_DB_MAX_IDLE_CONNS` | `5` | Max idle database connections |
@@ -112,6 +118,9 @@ If no credentials are set, a random password is generated and logged on startup.
 | `GET` | `/health` | Health check (JSON) |
 | `GET` | `/nanolytica.js` | Tracking script |
 | `POST` | `/api/analytics/collect` | Collect page view (respects DNT, rate-limited, returns 204) |
+| `GET` | `/admin/login` | Login page |
+| `POST` | `/admin/login` | Authenticate |
+| `POST` | `/admin/logout` | Sign out (clears session) |
 
 ### Admin (authenticated)
 
@@ -136,9 +145,19 @@ Period options: `today`, `week`, `month`, `year`.
   "referrer": "https://google.com",
   "screen_size": "1920x1080",
   "user_agent": "Mozilla/5.0...",
-  "duration_sec": 45
+  "duration_sec": 45,
+  "scroll_depth": 82
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `path` | string | Page path (max 2048 chars) |
+| `referrer` | string | Referrer URL (max 2048 chars) |
+| `screen_size` | string | Viewport size, e.g. `1920x1080` |
+| `user_agent` | string | Browser User-Agent (max 512 chars) |
+| `duration_sec` | int | Active engagement time in seconds (0-86400) |
+| `scroll_depth` | int | Max scroll depth percentage (0-100) |
 
 ## Architecture
 
@@ -152,23 +171,56 @@ Client                          Server
   |                               |    -> rate limit (5 req/s per IP)
   |                               |    -> store in SQLite (WAL mode)
   |                               |
-  |-- GET /admin/analytics/ ----->|  HTMX dashboard
+  |-- GET /admin/login ---------->|  login page (session-based auth)
+  |-- POST /admin/login --------->|  authenticate, set session cookie
+  |                               |
+  |-- GET /admin/analytics/ ----->|  talkDOM dashboard
   |                               |    -> server-rendered HTML fragments
 ```
+
+### Tracking Script
+
+The client tracking script (`nanolytica.js`) collects:
+
+- **Active engagement time** -- only counts time when the tab is visible AND focused. Pauses on blur/hidden, resumes on focus/visible.
+- **Scroll depth** -- tracks the maximum scroll position as a percentage of total page height.
+- **Localhost exclusion** -- skips tracking on `localhost`, `127.x.x.x`, `[::1]`, and `file:` protocol.
+- **Automation detection** -- skips tracking for headless browsers (`navigator.webdriver`, PhantomJS, Cypress, Nightmare).
 
 ### Request Flow
 
 1. Client loads `/nanolytica.js`
-2. Script sends POST to `/api/analytics/collect`
-3. Server parses User-Agent, detects bots, hashes IP (salted SHA-256)
-4. Visit stored in SQLite
-5. Dashboard renders stats via HTMX HTML fragments
+2. Script sends POST to `/api/analytics/collect` on page load (duration=0, initial scroll depth)
+3. Script tracks active engagement time and scroll depth while the user is on the page
+4. On page unload, script sends final POST with actual engaged time and max scroll depth
+5. Server parses User-Agent, detects bots, hashes IP (salted SHA-256)
+6. Visit stored in SQLite via async batch insert queue
+7. Dashboard renders stats via talkDOM HTML fragment updates
 
 ## Database
 
 Two main tables (`visits` for humans, `bot_visits` for crawlers) plus a `settings` table for configuration. Schema auto-created on first run with version-tracked migrations.
 
 SQLite runs in WAL mode. Data older than 365 days is cleaned up daily.
+
+### Schema
+
+The `visits` table includes:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `visitor_id` | TEXT | Anonymous fingerprint hash |
+| `session_id` | TEXT | Day-scoped session identifier |
+| `ip_hash` | TEXT | Salted SHA-256 hash of IP |
+| `browser` | TEXT | Browser name |
+| `os` | TEXT | Operating system |
+| `device` | TEXT | desktop, mobile, tablet |
+| `path` | TEXT | Page path |
+| `referrer` | TEXT | Referrer domain |
+| `screen_size` | TEXT | Viewport dimensions |
+| `timestamp` | DATETIME | Visit time (UTC) |
+| `duration_sec` | INTEGER | Active engagement time |
+| `scroll_depth` | INTEGER | Max scroll depth (0-100) |
 
 ### sqlc
 
@@ -182,23 +234,6 @@ make test       # verify
 ```
 
 `store.go` is a thin wrapper that delegates to the generated `sqlcgen.Queries` methods and converts between internal types and sqlc-generated types.
-
-```sql
--- Single-column indexes
-CREATE INDEX idx_visits_timestamp ON visits(timestamp);
-CREATE INDEX idx_visits_visitor_id ON visits(visitor_id);
-CREATE INDEX idx_visits_path ON visits(path);
-CREATE INDEX idx_visits_browser ON visits(browser);
-CREATE INDEX idx_visits_os ON visits(os);
-CREATE INDEX idx_visits_device ON visits(device);
-CREATE INDEX idx_bot_visits_timestamp ON bot_visits(timestamp);
-CREATE INDEX idx_bot_visits_name ON bot_visits(bot_name);
-
--- Composite indexes for common queries
-CREATE INDEX idx_visits_ts_path ON visits(timestamp, path);
-CREATE INDEX idx_visits_ts_visitor ON visits(timestamp, visitor_id);
-CREATE INDEX idx_bot_visits_ts_path ON bot_visits(timestamp, path);
-```
 
 ## Development
 
@@ -231,7 +266,7 @@ CREATE INDEX idx_bot_visits_ts_path ON bot_visits(timestamp, path);
 
 ```
 nanolytica/
-+-- main.go                     # server setup, middleware, routing
++-- main.go                     # server setup, middleware, routing, session auth
 +-- analytics/
 |   +-- analytics.go            # types, UA parsing, bot detection, hashing
 |   +-- store.go                # SQLite operations (thin wrapper around sqlcgen)
@@ -246,13 +281,15 @@ nanolytica/
 |   +-- templates/
 |       +-- layout.templ        # base layout, tab/period selectors
 |       +-- dashboard.templ     # dashboard page
-|       +-- fragments.templ     # HTMX HTML fragments
+|       +-- login.templ         # login page
+|       +-- fragments.templ     # talkDOM HTML fragments
 |       +-- types.go            # view model types
 +-- fe_src/
 |   +-- analytics.ts            # client tracking script
-|   +-- dashboard.ts            # dashboard JS
+|   +-- dashboard.ts            # dashboard JS (talkDOM integration)
 |   +-- css/input.css           # Tailwind input
 +-- static/                     # built assets (gitignored)
+|   +-- js/talkdom.js           # talkDOM library
 +-- data/                       # SQLite database (gitignored)
 +-- embed.go                    # embedded static files (embed build tag)
 +-- embed_default.go            # filesystem static files (default build tag)
@@ -278,6 +315,7 @@ Environment="PORT=8080"
 Environment="NANOLYTICA_DB_PATH=/var/lib/nanolytica/nanolytica.db"
 Environment="NANOLYTICA_USERNAME=admin"
 Environment="NANOLYTICA_PASSWORD=your-secure-password"
+Environment="COOKIE_SECURE=true"
 Restart=on-failure
 
 [Install]
@@ -314,23 +352,25 @@ analytics.example.com {
 
 ## Security
 
+- Session-based authentication with HMAC-signed cookies (30-day expiry)
 - Salted SHA-256 IP hashing (per-installation random salt)
 - Constant-time password comparison
-- Per-IP rate limiting on collect endpoint (5 req/s, burst 10)
-- Configurable CORS origins (`NANOLYTICA_CORS_ORIGINS`)
-- CORS scoped to public endpoints only
+- Per-IP rate limiting on collect endpoint (5 req/s, burst 10) and login (5 attempts per 5 minutes)
+- Strict Content Security Policy: `script-src 'self'`, no inline scripts
+- Configurable CORS origins (`NANOLYTICA_CORS_ORIGINS`), scoped to public endpoints only
 - Security headers: XSS protection, Content-Type nosniff, X-Frame-Options DENY
 - Type-safe SQL via [sqlc](https://sqlc.dev/) -- no hand-written query strings
-- Input validation: path length, screen size format, duration range, body size limit (10KB)
+- Input validation: path length, screen size format, duration range, scroll depth range, body size limit (10KB)
+- Client-side bot/automation detection (Selenium, Puppeteer, Cypress, PhantomJS)
 - Gzip compression on all responses
 - Docker runs as non-root user
 - Graceful shutdown on SIGINT/SIGTERM
 
 ## Privacy
 
-No PII stored. IP addresses are salted+hashed (irreversible). No cookies, no localStorage, no cross-site tracking. Honors `DNT: 1`. Query parameters stripped from URLs.
+No PII stored. IP addresses are salted+hashed (irreversible). No cookies, no localStorage, no cross-site tracking. Honors `DNT: 1`. Query parameters stripped from URLs. Localhost traffic excluded automatically.
 
-**Data collected:** page path, referrer domain, screen size, user-agent (for browser/OS/device detection), time on page.
+**Data collected:** page path, referrer domain, screen size, user-agent (for browser/OS/device detection), active engagement time, scroll depth.
 
 GDPR/CCPA compliant by design.
 
