@@ -34,7 +34,7 @@
     stats: '/admin/analytics/fragments/stats',
     botStats: '/admin/analytics/fragments/bot-stats',
     setup: '/admin/analytics/fragments/setup',
-    addSite: '/admin/analytics/api/sites'
+    sites: '/admin/analytics/api/sites'
   };
   const VALID_TABS: readonly DashboardTab[] = ['visitors', 'bots', 'setup'];
   const VALID_PERIODS: readonly TimePeriod[] = ['today', 'week', 'month', 'year'];
@@ -119,26 +119,43 @@
   }
 
   // ============================================================================
-  // Add Site Modal
+  // Site Management Modals
   // ============================================================================
 
-  function showModal(): void {
-    const modal = document.getElementById('add-site-modal');
+  function updateDeleteButtonVisibility(): void {
+    const btn = document.getElementById('delete-site-btn');
+    if (!btn) return;
+    btn.classList.toggle('hidden', state.currentSite === 'default');
+  }
+
+  function showModal(id: string): void {
+    const modal = document.getElementById(id);
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  function hideModals(): void {
+    document.querySelectorAll('[id$="-modal"]').forEach(el => el.classList.add('hidden'));
+  }
+
+  function showAddSiteModal(): void {
     const input = document.getElementById('new-site-name') as HTMLInputElement | null;
     const error = document.getElementById('add-site-error');
-    if (!modal) return;
-    modal.classList.remove('hidden');
-    if (input) { input.value = ''; input.focus(); }
+    if (input) { input.value = ''; }
     if (error) { error.classList.add('hidden'); error.textContent = ''; }
+    showModal('add-site-modal');
+    if (input) input.focus();
   }
 
-  function hideModal(): void {
-    const modal = document.getElementById('add-site-modal');
-    if (modal) modal.classList.add('hidden');
+  function showDeleteSiteModal(): void {
+    const nameEl = document.getElementById('delete-site-name');
+    const error = document.getElementById('delete-site-error');
+    if (nameEl) nameEl.textContent = state.currentSite;
+    if (error) { error.classList.add('hidden'); error.textContent = ''; }
+    showModal('delete-site-modal');
   }
 
-  function showModalError(msg: string): void {
-    const error = document.getElementById('add-site-error');
+  function showModalError(id: string, msg: string): void {
+    const error = document.getElementById(id);
     if (!error) return;
     error.textContent = msg;
     error.classList.remove('hidden');
@@ -149,14 +166,14 @@
     if (!input) return;
     const name = input.value.trim();
     if (!name) {
-      showModalError('Site name is required.');
+      showModalError('add-site-error', 'Site name is required.');
       return;
     }
 
     const body = new URLSearchParams();
     body.set('site_name', name);
 
-    fetch(ENDPOINTS.addSite, {
+    fetch(ENDPOINTS.sites, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString()
@@ -164,10 +181,9 @@
       .then(res => res.json())
       .then((data: { status?: string; error?: string; site?: string }) => {
         if (data.error) {
-          showModalError(data.error);
+          showModalError('add-site-error', data.error);
           return;
         }
-        // Add new option to select and switch to it
         const select = document.querySelector('[data-site-selector]') as HTMLSelectElement | null;
         if (select && data.site) {
           const option = document.createElement('option');
@@ -176,12 +192,43 @@
           select.appendChild(option);
           select.value = data.site;
           state.currentSite = data.site;
+          updateDeleteButtonVisibility();
           loadContent();
         }
-        hideModal();
+        hideModals();
       })
       .catch(() => {
-        showModalError('Failed to add site. Please try again.');
+        showModalError('add-site-error', 'Failed to add site. Please try again.');
+      });
+  }
+
+  function submitDeleteSite(): void {
+    const name = state.currentSite;
+    if (name === 'default') return;
+
+    fetch(ENDPOINTS.sites + '?name=' + encodeURIComponent(name), {
+      method: 'DELETE'
+    })
+      .then(res => res.json())
+      .then((data: { status?: string; error?: string }) => {
+        if (data.error) {
+          showModalError('delete-site-error', data.error);
+          return;
+        }
+        // Remove option from select and switch to default
+        const select = document.querySelector('[data-site-selector]') as HTMLSelectElement | null;
+        if (select) {
+          const option = select.querySelector('option[value="' + CSS.escape(name) + '"]');
+          if (option) option.remove();
+          select.value = 'default';
+        }
+        state.currentSite = 'default';
+        updateDeleteButtonVisibility();
+        hideModals();
+        loadContent();
+      })
+      .catch(() => {
+        showModalError('delete-site-error', 'Failed to delete site. Please try again.');
       });
   }
 
@@ -194,19 +241,31 @@
 
     // Add site button
     if (target.closest('[data-add-site]')) {
-      showModal();
+      showAddSiteModal();
+      return;
+    }
+
+    // Delete site button
+    if (target.closest('[data-delete-site]')) {
+      showDeleteSiteModal();
       return;
     }
 
     // Modal backdrop or cancel
     if (target.closest('[data-modal-backdrop]') || target.closest('[data-modal-cancel]')) {
-      hideModal();
+      hideModals();
       return;
     }
 
-    // Modal confirm
+    // Add site confirm
     if (target.closest('[data-modal-confirm]')) {
       submitAddSite();
+      return;
+    }
+
+    // Delete site confirm
+    if (target.closest('[data-delete-confirm]')) {
+      submitDeleteSite();
       return;
     }
 
@@ -232,10 +291,16 @@
   }
 
   function handleKeydown(e: KeyboardEvent): void {
-    const modal = document.getElementById('add-site-modal');
-    if (!modal || modal.classList.contains('hidden')) return;
-    if (e.key === 'Escape') hideModal();
-    if (e.key === 'Enter') submitAddSite();
+    const addModal = document.getElementById('add-site-modal');
+    const deleteModal = document.getElementById('delete-site-modal');
+    if (e.key === 'Escape') {
+      hideModals();
+      return;
+    }
+    if (e.key === 'Enter') {
+      if (addModal && !addModal.classList.contains('hidden')) submitAddSite();
+      if (deleteModal && !deleteModal.classList.contains('hidden')) submitDeleteSite();
+    }
   }
 
   // ============================================================================
@@ -249,8 +314,10 @@
     const siteSelect = document.querySelector('[data-site-selector]') as HTMLSelectElement | null;
     if (siteSelect) {
       state.currentSite = siteSelect.value;
+      updateDeleteButtonVisibility();
       siteSelect.addEventListener('change', () => {
         state.currentSite = siteSelect.value;
+        updateDeleteButtonVisibility();
         loadContent();
       });
     }

@@ -612,6 +612,18 @@ func (h *Handler) AddSite(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok", "site": name})
 }
 
+// DeleteSite handles DELETE requests to remove a site.
+func (h *Handler) DeleteSite(c echo.Context) error {
+	name := strings.TrimSpace(c.QueryParam("name"))
+	if name == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Site name is required"})
+	}
+	if err := h.registry.DeleteSite(name); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
 // RegisterRoutes registers analytics routes with the Echo router.
 func (h *Handler) RegisterRoutes(e *echo.Echo, publicGroup *echo.Group, authMiddleware echo.MiddlewareFunc) {
 	// Rate limit the collect endpoint: 5 req/s per IP, burst of 10
@@ -647,6 +659,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, publicGroup *echo.Group, authMidd
 
 	// Site management
 	admin.POST("/api/sites", h.AddSite)
+	admin.DELETE("/api/sites", h.DeleteSite)
 }
 
 // Dashboard renders the analytics dashboard HTML.

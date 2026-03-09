@@ -143,6 +143,40 @@ func (r *SiteRegistry) AddSite(name string) error {
 	return nil
 }
 
+// DeleteSite closes and removes a site's store and deletes its database files.
+func (r *SiteRegistry) DeleteSite(name string) error {
+	if name == "" || name == "default" {
+		return fmt.Errorf("cannot delete the default site")
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	s, exists := r.stores[name]
+	if !exists {
+		return fmt.Errorf("site %q not found", name)
+	}
+
+	s.Close()
+	delete(r.stores, name)
+
+	// Rebuild sites slice
+	sites := make([]string, 0, len(r.stores))
+	for k := range r.stores {
+		sites = append(sites, k)
+	}
+	sort.Strings(sites)
+	r.sites = sites
+
+	// Delete database files
+	dbPath := filepath.Join(r.dataDir, name+".db")
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		os.Remove(dbPath + suffix)
+	}
+
+	return nil
+}
+
 // Close closes all stores.
 func (r *SiteRegistry) Close() {
 	r.mu.Lock()

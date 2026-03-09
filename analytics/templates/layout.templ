@@ -100,6 +100,9 @@ templ SiteSelector(sites []string, currentSite string) {
 		<button type="button" class="text-sm px-3 py-1.5 border border-dashed border-gray-400 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors" data-add-site>
 			+ Add site
 		</button>
+		<button type="button" class="hidden text-sm px-3 py-1.5 border border-dashed border-red-300 rounded-md text-red-500 hover:border-red-500 hover:text-red-600 transition-colors" id="delete-site-btn" data-delete-site>
+			Delete site
+		</button>
 	</div>
 	<!-- Add site modal -->
 	<div id="add-site-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
@@ -116,6 +119,20 @@ templ SiteSelector(sites []string, currentSite string) {
 			<div class="flex justify-end gap-2">
 				<button type="button" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800" data-modal-cancel>Cancel</button>
 				<button type="button" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700" data-modal-confirm>Add</button>
+			</div>
+		</div>
+	</div>
+	<!-- Delete site confirmation modal -->
+	<div id="delete-site-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+		<div class="absolute inset-0 bg-black/40" data-modal-backdrop></div>
+		<div class="relative bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+			<h3 class="text-lg font-semibold text-gray-800 mb-2">Delete Site</h3>
+			<p class="text-sm text-gray-600 mb-1">Are you sure you want to delete <strong id="delete-site-name"></strong>?</p>
+			<p class="text-sm text-red-600 mb-4">This will permanently delete all analytics data for this site.</p>
+			<p id="delete-site-error" class="text-sm text-red-600 mb-3 hidden"></p>
+			<div class="flex justify-end gap-2">
+				<button type="button" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800" data-modal-cancel>Cancel</button>
+				<button type="button" class="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700" data-delete-confirm>Delete</button>
 			</div>
 		</div>
 	</div>
