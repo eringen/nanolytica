@@ -104,16 +104,15 @@ async function build() {
     console.log('  ! dashboard.js not found, skipping');
   }
 
-  // Copy htmx.min.js from fe_src to static/js
-  const htmxSrc = path.join(__dirname, '..', 'fe_src', 'htmx.min.js');
-  const htmxDest = path.join(STATIC_JS_DIR, 'htmx.min.js');
-  
-  if (fs.existsSync(htmxSrc)) {
-    fs.copyFileSync(htmxSrc, htmxDest);
-    const size = fs.statSync(htmxDest).size;
-    console.log(`  ✓ htmx.min.js copied (${size} bytes)`);
+  // talkdom.js lives in static/js/ — it's not compiled from fe_src.
+  // Just report its size; it's already small enough to serve as-is.
+  const talkdomPath = path.join(STATIC_JS_DIR, 'talkdom.js');
+
+  if (fs.existsSync(talkdomPath)) {
+    const size = fs.statSync(talkdomPath).size;
+    console.log(`  ✓ talkdom.js (${size} bytes)`);
   } else {
-    console.log('  ! htmx.min.js not found in fe_src');
+    console.log('  ! talkdom.js not found in static/js');
   }
 
   console.log('\n✓ Minification complete!');

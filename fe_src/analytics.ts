@@ -37,12 +37,10 @@
     pageHeight: number;      // total scrollable height
   }
 
-  interface HtmxAfterSwapDetail {
-    target: HTMLElement;
-    xhr: XMLHttpRequest;
-    successful: boolean;
-    failed: boolean;
-    ignoreTitle?: boolean;
+  interface TalkDOMDoneDetail {
+    receiver: string;
+    selector: string;
+    args: string[];
   }
 
   // ============================================================================
@@ -291,19 +289,19 @@
     }
   }
 
-  function isHtmxAfterSwapEvent(event: Event): event is CustomEvent<HtmxAfterSwapDetail> {
-    return event.type === 'htmx:afterSwap' &&
+  function isTalkDOMDoneEvent(event: Event): event is CustomEvent<TalkDOMDoneDetail> {
+    return event.type === 'talkdom:done' &&
            'detail' in event &&
            event.detail !== null &&
            typeof event.detail === 'object' &&
-           'target' in event.detail;
+           'receiver' in event.detail;
   }
 
-  function handleHtmxSwap(event: Event): void {
-    if (!isHtmxAfterSwapEvent(event)) return;
+  function handleContentSwap(event: Event): void {
+    if (!isTalkDOMDoneEvent(event)) return;
 
     const detail = event.detail;
-    if (detail.target.id !== 'main-content') return;
+    if (detail.receiver !== 'main-content') return;
     if (!state.isInitialized) return;
 
     // Send final data for previous page
@@ -358,10 +356,8 @@
     window.addEventListener('beforeunload', handlePageUnload);
     window.addEventListener('pagehide', handlePageUnload);
 
-    const htmx = (window as Window & { htmx?: unknown }).htmx;
-    if (htmx) {
-      document.addEventListener('htmx:afterSwap', handleHtmxSwap);
-    }
+    // Listen for talkDOM content swaps (for SPA-style navigation)
+    document.addEventListener('talkdom:done', handleContentSwap);
 
     (window as Window & { Nanolytica?: { track: () => void } }).Nanolytica = {
       track: () => {

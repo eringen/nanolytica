@@ -186,7 +186,7 @@ func (h *Handler) GetStats(c echo.Context) error {
 	})
 }
 
-// GetStatsFragment returns HTML fragment for visitor stats (htmx)
+// GetStatsFragment returns HTML fragment for visitor stats (talkDOM)
 func (h *Handler) GetStatsFragment(c echo.Context) error {
 	_, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 
@@ -236,7 +236,7 @@ func (h *Handler) GetBotStats(c echo.Context) error {
 	})
 }
 
-// GetBotStatsFragment returns HTML fragment for bot stats (htmx)
+// GetBotStatsFragment returns HTML fragment for bot stats (talkDOM)
 func (h *Handler) GetBotStatsFragment(c echo.Context) error {
 	_, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 
@@ -256,7 +256,7 @@ func (h *Handler) GetBotStatsFragment(c echo.Context) error {
 	return component.Render(c.Request().Context(), c.Response())
 }
 
-// GetSetupFragment returns HTML fragment for setup tab (htmx)
+// GetSetupFragment returns HTML fragment for setup tab (talkDOM)
 func (h *Handler) GetSetupFragment(c echo.Context) error {
 	origin := c.Scheme() + "://" + c.Request().Host
 	component := templates.SetupContent(origin)
@@ -588,7 +588,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, publicGroup *echo.Group, authMidd
 	admin.GET("/api/export/stats", h.ExportStatsCSV)
 	admin.GET("/api/export/bot-stats", h.ExportBotStatsCSV)
 
-	// Admin fragment endpoints (HTML for htmx)
+	// Admin fragment endpoints (HTML for talkDOM)
 	admin.GET("/fragments/stats", h.GetStatsFragment)
 	admin.GET("/fragments/bot-stats", h.GetBotStatsFragment)
 	admin.GET("/fragments/setup", h.GetSetupFragment)

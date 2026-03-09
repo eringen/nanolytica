@@ -4,13 +4,13 @@ import "fmt"
 
 // PeriodSelectorWithStats renders the period selector with visitor stats content
 templ PeriodSelectorWithStats(period string, stats *StatsViewModel, realtime int, days int, hourly bool, monthly bool) {
-	@PeriodSelector(period, "/admin/analytics/fragments/stats")
+	@PeriodSelector(period)
 	@StatsFragment(stats, realtime, days, hourly, monthly)
 }
 
 // PeriodSelectorWithBotStats renders the period selector with bot stats content
 templ PeriodSelectorWithBotStats(period string, stats *BotStatsViewModel, days int, hourly bool, monthly bool) {
-	@PeriodSelector(period, "/admin/analytics/fragments/bot-stats")
+	@PeriodSelector(period)
 	@BotStatsFragment(stats, days, hourly, monthly)
 }
 
@@ -36,12 +36,12 @@ templ BotStatsFragment(stats *BotStatsViewModel, periodDays int, hourly bool, mo
 	@BotTopPagesSection(stats.TopPages)
 }
 
-// StatsFragmentOnly renders only the stats content without period selector (for htmx updates)
+// StatsFragmentOnly renders only the stats content without period selector (for talkDOM updates)
 templ StatsFragmentOnly(stats *StatsViewModel, realtime int, days int, hourly bool, monthly bool) {
 	@StatsFragment(stats, realtime, days, hourly, monthly)
 }
 
-// BotStatsFragmentOnly renders only the bot stats content without period selector (for htmx updates)
+// BotStatsFragmentOnly renders only the bot stats content without period selector (for talkDOM updates)
 templ BotStatsFragmentOnly(stats *BotStatsViewModel, days int, hourly bool, monthly bool) {
 	@BotStatsFragment(stats, days, hourly, monthly)
 }

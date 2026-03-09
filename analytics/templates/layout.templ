@@ -1,6 +1,6 @@
 package templates
 
-// Layout renders the base HTML layout with htmx and Tailwind CSS
+// Layout renders the base HTML layout with talkDOM and Tailwind CSS
 templ Layout(title string, activeTab string) {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -8,7 +8,7 @@ templ Layout(title string, activeTab string) {
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>{ title }</title>
-			<script src="/static/js/htmx.min.js"></script>
+			<script src="/static/js/talkdom.js"></script>
 			<link rel="stylesheet" href="/static/css/styles.css"/>
 		</head>
 		<body class="bg-gray-100 min-h-screen">
@@ -28,37 +28,25 @@ templ Layout(title string, activeTab string) {
 	</html>
 }
 
-// TabSelector renders the tab navigation with htmx
+// TabSelector renders the tab navigation
 templ TabSelector(activeTab string) {
 	<div class="border-b border-gray-200 mb-6">
 		<div class="flex gap-1">
-			<button 
-				hx-get="/admin/analytics/fragments/stats"
-				hx-target="#content"
-				hx-trigger="click"
-				hx-push-url="false"
+			<button
 				onclick="switchTab('visitors')"
 				data-tab="visitors"
 				class={ "tab-btn", templ.KV("active", activeTab == "visitors") }
 			>
 				Visitors
 			</button>
-			<button 
-				hx-get="/admin/analytics/fragments/bot-stats"
-				hx-target="#content"
-				hx-trigger="click"
-				hx-push-url="false"
+			<button
 				onclick="switchTab('bots')"
 				data-tab="bots"
 				class={ "tab-btn", templ.KV("active", activeTab == "bots") }
 			>
 				Bots & Crawlers
 			</button>
-			<button 
-				hx-get="/admin/analytics/fragments/setup"
-				hx-target="#content"
-				hx-trigger="click"
-				hx-push-url="false"
+			<button
 				onclick="switchTab('setup')"
 				data-tab="setup"
 				class={ "tab-btn", templ.KV("active", activeTab == "setup") }
@@ -69,41 +57,33 @@ templ TabSelector(activeTab string) {
 	</div>
 }
 
-// PeriodSelector renders the period buttons with htmx
-templ PeriodSelector(activePeriod string, hxGet string) {
+// PeriodSelector renders the period buttons
+templ PeriodSelector(activePeriod string) {
 	<div class="flex gap-2 mb-6" id="period-selector">
-		<button 
-			hx-get={ hxGet + "?period=today" }
-			hx-target="#content"
+		<button
 			data-period="today"
-			onclick="setActivePeriod('today')"
+			onclick="loadPeriod('today')"
 			class={ "period-btn", templ.KV("active", activePeriod == "today") }
 		>
 			Last 24 Hours
 		</button>
-		<button 
-			hx-get={ hxGet + "?period=week" }
-			hx-target="#content"
+		<button
 			data-period="week"
-			onclick="setActivePeriod('week')"
+			onclick="loadPeriod('week')"
 			class={ "period-btn", templ.KV("active", activePeriod == "week") }
 		>
 			Last 7 Days
 		</button>
-		<button 
-			hx-get={ hxGet + "?period=month" }
-			hx-target="#content"
+		<button
 			data-period="month"
-			onclick="setActivePeriod('month')"
+			onclick="loadPeriod('month')"
 			class={ "period-btn", templ.KV("active", activePeriod == "month") }
 		>
 			Last 30 Days
 		</button>
-		<button 
-			hx-get={ hxGet + "?period=year" }
-			hx-target="#content"
+		<button
 			data-period="year"
-			onclick="setActivePeriod('year')"
+			onclick="loadPeriod('year')"
 			class={ "period-btn", templ.KV("active", activePeriod == "year") }
 		>
 			Last Year
@@ -113,7 +93,7 @@ templ PeriodSelector(activePeriod string, hxGet string) {
 
 // ContentContainer renders the main content area
 templ ContentContainer() {
-	<div id="content" class="animate-fade-in">
+	<div id="content" receiver="content" class="animate-fade-in">
 		<div class="loading-state">
 			<div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
 			<p class="mt-2 text-gray-600">Loading...</p>
