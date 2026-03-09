@@ -104,10 +104,44 @@ services:
 | `NANOLYTICA_PASSWORD` | *(none)* | Dashboard password |
 | `COOKIE_SECURE` | `false` | Set to `true` for HTTPS (enables Secure flag on session cookie) |
 | `NANOLYTICA_CORS_ORIGINS` | `*` | Allowed CORS origins (comma-separated, or `*` for all) |
-| `NANOLYTICA_DB_MAX_OPEN_CONNS` | `10` | Max open database connections |
-| `NANOLYTICA_DB_MAX_IDLE_CONNS` | `5` | Max idle database connections |
+| `NANOLYTICA_SITES` | *(none)* | Comma-separated site names for multi-site tracking |
+| `NANOLYTICA_DB_MAX_OPEN_CONNS` | `10` | Max open database connections (per site) |
+| `NANOLYTICA_DB_MAX_IDLE_CONNS` | `5` | Max idle database connections (per site) |
 
 If no credentials are set, a random password is generated and logged on startup.
+
+## Multi-Site Tracking
+
+Track multiple websites with a single Nanolytica installation. Each site gets its own SQLite database and unique salt for IP hashing.
+
+### Setup
+
+1. Set the `NANOLYTICA_SITES` environment variable:
+
+```bash
+NANOLYTICA_SITES=blog.example.com,shop.example.com ./nanolytica
+```
+
+2. Add the tracking script with `data-site` attribute:
+
+```html
+<!-- blog.example.com -->
+<script src="http://analytics.example.com/nanolytica.js" data-site="blog.example.com"></script>
+
+<!-- shop.example.com -->
+<script src="http://analytics.example.com/nanolytica.js" data-site="shop.example.com"></script>
+```
+
+3. Switch between sites in the dashboard using the site selector dropdown.
+
+### How It Works
+
+- The "default" site is always available (uses the configured `NANOLYTICA_DB_PATH`)
+- Additional sites store data in `{data_dir}/{site_name}.db`
+- Each site has its own salt, so IP hashes are not correlated across sites
+- Site names allow alphanumeric characters, dots, hyphens, and underscores (max 64 chars)
+- Requests with unknown site names are silently dropped
+- Without `data-site` attribute, the tracking script sends to the "default" site
 
 ## API
 
@@ -146,7 +180,8 @@ Period options: `today`, `week`, `month`, `year`.
   "screen_size": "1920x1080",
   "user_agent": "Mozilla/5.0...",
   "duration_sec": 45,
-  "scroll_depth": 82
+  "scroll_depth": 82,
+  "site": "blog.example.com"
 }
 ```
 
@@ -158,6 +193,7 @@ Period options: `today`, `week`, `month`, `year`.
 | `user_agent` | string | Browser User-Agent (max 512 chars) |
 | `duration_sec` | int | Active engagement time in seconds (0-86400) |
 | `scroll_depth` | int | Max scroll depth percentage (0-100) |
+| `site` | string | Site identifier (max 64 chars, default: "default") |
 
 ## Architecture
 
@@ -270,6 +306,7 @@ nanolytica/
 +-- analytics/
 |   +-- analytics.go            # types, UA parsing, bot detection, hashing
 |   +-- store.go                # SQLite operations (thin wrapper around sqlcgen)
+|   +-- registry.go             # SiteRegistry for multi-site support
 |   +-- handlers.go             # HTTP handlers
 |   +-- analytics_test.go       # core function tests
 |   +-- handlers_test.go        # validation tests
