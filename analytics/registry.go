@@ -2,9 +2,11 @@ package analytics
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -22,11 +24,12 @@ type SiteRegistry struct {
 	cfg       StoreConfig
 }
 
-// NewSiteRegistry creates a registry and opens stores for all configured sites.
+// NewSiteRegistry creates a registry, opens the default store, and auto-discovers
+// additional sites from existing .db files in the data directory.
 // defaultDBPath is the full path to the default site's database (e.g., "data/nanolytica.db").
-// sites is the list of additional site names. The "default" site is always available.
-func NewSiteRegistry(defaultDBPath string, sites []string, cfg StoreConfig) (*SiteRegistry, error) {
+func NewSiteRegistry(defaultDBPath string, cfg StoreConfig) (*SiteRegistry, error) {
 	dataDir := filepath.Dir(defaultDBPath)
+	defaultBase := filepath.Base(defaultDBPath)
 	r := &SiteRegistry{
 		stores:    make(map[string]*Store),
 		dataDir:   dataDir,
@@ -42,16 +45,25 @@ func NewSiteRegistry(defaultDBPath string, sites []string, cfg StoreConfig) (*Si
 	r.stores["default"] = store
 	r.sites = []string{"default"}
 
-	// Open stores for additional sites
-	for _, site := range sites {
-		if site == "" || site == "default" {
+	// Auto-discover additional sites from existing .db files
+	entries, err := os.ReadDir(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("read data directory: %w", err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".db") {
 			continue
 		}
-		if !ValidateSiteName(site) {
-			r.Close()
-			return nil, fmt.Errorf("invalid site name: %q", site)
+		// Skip the default db, WAL files, and journal files
+		if name == defaultBase || strings.HasSuffix(name, "-wal") || strings.HasSuffix(name, "-shm") || strings.HasSuffix(name, "-journal") {
+			continue
 		}
-		dbPath := filepath.Join(dataDir, site+".db")
+		site := strings.TrimSuffix(name, ".db")
+		if !ValidateSiteName(site) {
+			continue
+		}
+		dbPath := filepath.Join(dataDir, name)
 		s, err := NewStoreWithConfig(dbPath, cfg)
 		if err != nil {
 			r.Close()
@@ -98,6 +110,37 @@ func (r *SiteRegistry) ListSites() []string {
 	result := make([]string, len(r.sites))
 	copy(result, r.sites)
 	return result
+}
+
+// AddSite creates a new site store at runtime. Returns error if name is invalid or already exists.
+func (r *SiteRegistry) AddSite(name string) error {
+	if !ValidateSiteName(name) {
+		return fmt.Errorf("invalid site name: %q", name)
+	}
+	if name == "default" {
+		return fmt.Errorf("cannot add reserved site name %q", name)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.stores[name]; exists {
+		return fmt.Errorf("site %q already exists", name)
+	}
+
+	dbPath := filepath.Join(r.dataDir, name+".db")
+	s, err := NewStoreWithConfig(dbPath, r.cfg)
+	if err != nil {
+		return fmt.Errorf("open store for site %q: %w", name, err)
+	}
+	r.stores[name] = s
+	r.sites = append(r.sites, name)
+	sort.Strings(r.sites)
+
+	// Start cleanup scheduler for the new site
+	s.StartCleanupScheduler(365, 24*time.Hour)
+
+	return nil
 }
 
 // Close closes all stores.

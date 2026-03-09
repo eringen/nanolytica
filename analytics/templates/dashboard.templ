@@ -3,9 +3,7 @@ package templates
 // Dashboard renders the main analytics dashboard page
 templ Dashboard(sites []string, currentSite string) {
 	@Layout("Nanolytica Dashboard", "visitors") {
-		if len(sites) > 1 {
-			@SiteSelector(sites, currentSite)
-		}
+		@SiteSelector(sites, currentSite)
 		@PeriodSelector("week")
 		@ContentContainer()
 	}

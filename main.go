@@ -40,17 +40,7 @@ func main() {
 		}
 	}
 
-	// Parse multi-site configuration
-	var sites []string
-	if sitesStr := os.Getenv("NANOLYTICA_SITES"); sitesStr != "" {
-		for _, s := range strings.Split(sitesStr, ",") {
-			if s = strings.TrimSpace(s); s != "" {
-				sites = append(sites, s)
-			}
-		}
-	}
-
-	registry, err := analytics.NewSiteRegistry(dbPath, sites, dbCfg)
+	registry, err := analytics.NewSiteRegistry(dbPath, dbCfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize site registry: %v", err)
 	}

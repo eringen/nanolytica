@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/eringen/nanolytica/analytics/templates"
@@ -599,6 +600,18 @@ func (h *Handler) ExportBotStatsCSV(c echo.Context) error {
 	return nil
 }
 
+// AddSite handles POST requests to add a new site.
+func (h *Handler) AddSite(c echo.Context) error {
+	name := strings.TrimSpace(c.FormValue("site_name"))
+	if name == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Site name is required"})
+	}
+	if err := h.registry.AddSite(name); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok", "site": name})
+}
+
 // RegisterRoutes registers analytics routes with the Echo router.
 func (h *Handler) RegisterRoutes(e *echo.Echo, publicGroup *echo.Group, authMiddleware echo.MiddlewareFunc) {
 	// Rate limit the collect endpoint: 5 req/s per IP, burst of 10
@@ -631,6 +644,9 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, publicGroup *echo.Group, authMidd
 	admin.GET("/fragments/stats", h.GetStatsFragment)
 	admin.GET("/fragments/bot-stats", h.GetBotStatsFragment)
 	admin.GET("/fragments/setup", h.GetSetupFragment)
+
+	// Site management
+	admin.POST("/api/sites", h.AddSite)
 }
 
 // Dashboard renders the analytics dashboard HTML.

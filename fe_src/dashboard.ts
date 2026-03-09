@@ -33,7 +33,8 @@
   const ENDPOINTS = {
     stats: '/admin/analytics/fragments/stats',
     botStats: '/admin/analytics/fragments/bot-stats',
-    setup: '/admin/analytics/fragments/setup'
+    setup: '/admin/analytics/fragments/setup',
+    addSite: '/admin/analytics/api/sites'
   };
   const VALID_TABS: readonly DashboardTab[] = ['visitors', 'bots', 'setup'];
   const VALID_PERIODS: readonly TimePeriod[] = ['today', 'week', 'month', 'year'];
@@ -118,11 +119,96 @@
   }
 
   // ============================================================================
+  // Add Site Modal
+  // ============================================================================
+
+  function showModal(): void {
+    const modal = document.getElementById('add-site-modal');
+    const input = document.getElementById('new-site-name') as HTMLInputElement | null;
+    const error = document.getElementById('add-site-error');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    if (input) { input.value = ''; input.focus(); }
+    if (error) { error.classList.add('hidden'); error.textContent = ''; }
+  }
+
+  function hideModal(): void {
+    const modal = document.getElementById('add-site-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function showModalError(msg: string): void {
+    const error = document.getElementById('add-site-error');
+    if (!error) return;
+    error.textContent = msg;
+    error.classList.remove('hidden');
+  }
+
+  function submitAddSite(): void {
+    const input = document.getElementById('new-site-name') as HTMLInputElement | null;
+    if (!input) return;
+    const name = input.value.trim();
+    if (!name) {
+      showModalError('Site name is required.');
+      return;
+    }
+
+    const body = new URLSearchParams();
+    body.set('site_name', name);
+
+    fetch(ENDPOINTS.addSite, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    })
+      .then(res => res.json())
+      .then((data: { status?: string; error?: string; site?: string }) => {
+        if (data.error) {
+          showModalError(data.error);
+          return;
+        }
+        // Add new option to select and switch to it
+        const select = document.querySelector('[data-site-selector]') as HTMLSelectElement | null;
+        if (select && data.site) {
+          const option = document.createElement('option');
+          option.value = data.site;
+          option.textContent = data.site;
+          select.appendChild(option);
+          select.value = data.site;
+          state.currentSite = data.site;
+          loadContent();
+        }
+        hideModal();
+      })
+      .catch(() => {
+        showModalError('Failed to add site. Please try again.');
+      });
+  }
+
+  // ============================================================================
   // Event Delegation
   // ============================================================================
 
   function handleClick(e: Event): void {
     const target = e.target as HTMLElement;
+
+    // Add site button
+    if (target.closest('[data-add-site]')) {
+      showModal();
+      return;
+    }
+
+    // Modal backdrop or cancel
+    if (target.closest('[data-modal-backdrop]') || target.closest('[data-modal-cancel]')) {
+      hideModal();
+      return;
+    }
+
+    // Modal confirm
+    if (target.closest('[data-modal-confirm]')) {
+      submitAddSite();
+      return;
+    }
 
     // Tab button click
     const tabBtn = target.closest('[data-tab]') as HTMLElement | null;
@@ -145,6 +231,13 @@
     }
   }
 
+  function handleKeydown(e: KeyboardEvent): void {
+    const modal = document.getElementById('add-site-modal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    if (e.key === 'Escape') hideModal();
+    if (e.key === 'Enter') submitAddSite();
+  }
+
   // ============================================================================
   // Initialization
   // ============================================================================
@@ -164,6 +257,7 @@
 
     // Single click listener for all interactive buttons
     document.addEventListener('click', handleClick);
+    document.addEventListener('keydown', handleKeydown);
 
     // Auto-refresh every 60s
     setInterval(() => {
