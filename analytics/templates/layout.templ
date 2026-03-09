@@ -1,7 +1,7 @@
 package templates
 
 // Layout renders the base HTML layout with talkDOM and Tailwind CSS
-templ Layout(title string, activeTab string) {
+templ Layout(title string, activeTab string, sites []string, currentSite string) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -14,16 +14,20 @@ templ Layout(title string, activeTab string) {
 		<body class="bg-gray-100 min-h-screen">
 			<div class="max-w-6xl mx-auto p-6">
 				<div class="flex items-center justify-between mb-6">
-					<h1 class="text-3xl font-bold text-gray-800">Nanolytica Dashboard</h1>
-					<form method="POST" action="/admin/logout">
-						<button type="submit" class="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-							Sign out
-						</button>
-					</form>
+					<h1 class="text-3xl font-bold text-gray-800">Nanolytica</h1>
+					<div class="flex items-center gap-3">
+						@SiteSelector(sites, currentSite)
+						<form method="POST" action="/admin/logout">
+							<button type="submit" class="text-sm text-gray-500 hover:text-gray-700 transition-colors">
+								Sign out
+							</button>
+						</form>
+					</div>
 				</div>
 				@TabSelector(activeTab)
 				{ children... }
 			</div>
+			@SiteModals()
 		</body>
 	</html>
 }
@@ -84,11 +88,10 @@ templ PeriodSelector(activePeriod string) {
 	</div>
 }
 
-// SiteSelector renders the site dropdown and add-site button
+// SiteSelector renders the inline site controls (dropdown + add + delete)
 templ SiteSelector(sites []string, currentSite string) {
-	<div class="flex items-center gap-3 mb-4" id="site-selector">
-		<label class="text-sm text-gray-600 font-medium">Site:</label>
-		<select class="site-select text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" data-site-selector>
+	<div class="flex items-center gap-2" id="site-selector">
+		<select class="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" data-site-selector>
 			for _, site := range sites {
 				if site == currentSite {
 					<option value={ site } selected>{ site }</option>
@@ -97,13 +100,13 @@ templ SiteSelector(sites []string, currentSite string) {
 				}
 			}
 		</select>
-		<button type="button" class="text-sm px-3 py-1.5 border border-dashed border-gray-400 rounded-md text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors" data-add-site>
-			+ Add site
-		</button>
-		<button type="button" class="hidden text-sm px-3 py-1.5 border border-dashed border-red-300 rounded-md text-red-500 hover:border-red-500 hover:text-red-600 transition-colors" id="delete-site-btn" data-delete-site>
-			Delete site
-		</button>
+		<button type="button" class="text-sm text-gray-500 hover:text-blue-600 transition-colors" data-add-site title="Add site">+</button>
+		<button type="button" class="hidden text-sm text-gray-400 hover:text-red-600 transition-colors" id="delete-site-btn" data-delete-site title="Delete site">&times;</button>
 	</div>
+}
+
+// SiteModals renders the add/delete site modals (placed at end of body)
+templ SiteModals() {
 	<!-- Add site modal -->
 	<div id="add-site-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
 		<div class="absolute inset-0 bg-black/40" data-modal-backdrop></div>

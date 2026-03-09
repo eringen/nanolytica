@@ -2,8 +2,7 @@ package templates
 
 // Dashboard renders the main analytics dashboard page
 templ Dashboard(sites []string, currentSite string) {
-	@Layout("Nanolytica Dashboard", "visitors") {
-		@SiteSelector(sites, currentSite)
+	@Layout("Nanolytica Dashboard", "visitors", sites, currentSite) {
 		@PeriodSelector("week")
 		@ContentContainer()
 	}
