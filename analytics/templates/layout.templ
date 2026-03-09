@@ -33,21 +33,18 @@ templ TabSelector(activeTab string) {
 	<div class="border-b border-gray-200 mb-6">
 		<div class="flex gap-1">
 			<button
-				onclick="switchTab('visitors')"
 				data-tab="visitors"
 				class={ "tab-btn", templ.KV("active", activeTab == "visitors") }
 			>
 				Visitors
 			</button>
 			<button
-				onclick="switchTab('bots')"
 				data-tab="bots"
 				class={ "tab-btn", templ.KV("active", activeTab == "bots") }
 			>
 				Bots & Crawlers
 			</button>
 			<button
-				onclick="switchTab('setup')"
 				data-tab="setup"
 				class={ "tab-btn", templ.KV("active", activeTab == "setup") }
 			>
@@ -62,28 +59,24 @@ templ PeriodSelector(activePeriod string) {
 	<div class="flex gap-2 mb-6" id="period-selector">
 		<button
 			data-period="today"
-			onclick="loadPeriod('today')"
 			class={ "period-btn", templ.KV("active", activePeriod == "today") }
 		>
 			Last 24 Hours
 		</button>
 		<button
 			data-period="week"
-			onclick="loadPeriod('week')"
 			class={ "period-btn", templ.KV("active", activePeriod == "week") }
 		>
 			Last 7 Days
 		</button>
 		<button
 			data-period="month"
-			onclick="loadPeriod('month')"
 			class={ "period-btn", templ.KV("active", activePeriod == "month") }
 		>
 			Last 30 Days
 		</button>
 		<button
 			data-period="year"
-			onclick="loadPeriod('year')"
 			class={ "period-btn", templ.KV("active", activePeriod == "year") }
 		>
 			Last Year

@@ -1,6 +1,6 @@
 /**
  * Nanolytica Dashboard
- * Uses talkDOM for partial page updates
+ * Uses talkDOM for partial page updates, event delegation for CSP compliance
  */
 
 (function() {
@@ -34,6 +34,8 @@
     botStats: '/admin/analytics/fragments/bot-stats',
     setup: '/admin/analytics/fragments/setup'
   };
+  const VALID_TABS: readonly DashboardTab[] = ['visitors', 'bots', 'setup'];
+  const VALID_PERIODS: readonly TimePeriod[] = ['today', 'week', 'month', 'year'];
 
   // ============================================================================
   // State
@@ -102,10 +104,6 @@
     loadContent();
   }
 
-  // ============================================================================
-  // Period Management
-  // ============================================================================
-
   function loadPeriod(period: TimePeriod): void {
     if (state.currentTab === 'bots') {
       state.botPeriod = period;
@@ -117,15 +115,31 @@
   }
 
   // ============================================================================
-  // Auto-refresh
+  // Event Delegation
   // ============================================================================
 
-  function startAutoRefresh(): void {
-    setInterval(() => {
-      if (state.currentTab !== 'setup') {
-        loadContent();
+  function handleClick(e: Event): void {
+    const target = e.target as HTMLElement;
+
+    // Tab button click
+    const tabBtn = target.closest('[data-tab]') as HTMLElement | null;
+    if (tabBtn) {
+      const tab = tabBtn.dataset.tab;
+      if (tab && VALID_TABS.includes(tab as DashboardTab)) {
+        switchTab(tab as DashboardTab);
       }
-    }, AUTO_REFRESH_INTERVAL);
+      return;
+    }
+
+    // Period button click
+    const periodBtn = target.closest('[data-period]') as HTMLElement | null;
+    if (periodBtn) {
+      const period = periodBtn.dataset.period;
+      if (period && VALID_PERIODS.includes(period as TimePeriod)) {
+        loadPeriod(period as TimePeriod);
+      }
+      return;
+    }
   }
 
   // ============================================================================
@@ -135,15 +149,15 @@
   function init(): void {
     if (typeof window === 'undefined') return;
 
-    // Expose functions globally for inline onclick handlers
-    (window as Window & {
-      switchTab: typeof switchTab;
-      loadPeriod: typeof loadPeriod;
-    }).switchTab = switchTab;
+    // Single click listener for all interactive buttons
+    document.addEventListener('click', handleClick);
 
-    (window as Window & { loadPeriod: typeof loadPeriod }).loadPeriod = loadPeriod;
-
-    startAutoRefresh();
+    // Auto-refresh every 60s
+    setInterval(() => {
+      if (state.currentTab !== 'setup') {
+        loadContent();
+      }
+    }, AUTO_REFRESH_INTERVAL);
 
     // Initial load
     loadContent();
