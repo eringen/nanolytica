@@ -104,7 +104,6 @@ services:
 | `NANOLYTICA_PASSWORD` | *(none)* | Dashboard password |
 | `COOKIE_SECURE` | `false` | Set to `true` for HTTPS (enables Secure flag on session cookie) |
 | `NANOLYTICA_CORS_ORIGINS` | `*` | Allowed CORS origins (comma-separated, or `*` for all) |
-| `NANOLYTICA_SITES` | *(none)* | Comma-separated site names for multi-site tracking |
 | `NANOLYTICA_DB_MAX_OPEN_CONNS` | `10` | Max open database connections (per site) |
 | `NANOLYTICA_DB_MAX_IDLE_CONNS` | `5` | Max idle database connections (per site) |
 
@@ -116,11 +115,7 @@ Track multiple websites with a single Nanolytica installation. Each site gets it
 
 ### Setup
 
-1. Set the `NANOLYTICA_SITES` environment variable:
-
-```bash
-NANOLYTICA_SITES=blog.example.com,shop.example.com ./nanolytica
-```
+1. Click **"+ Add site"** in the dashboard to create a new site, or sites are auto-discovered from existing `.db` files in the data directory on startup.
 
 2. Add the tracking script with `data-site` attribute:
 
@@ -137,7 +132,8 @@ NANOLYTICA_SITES=blog.example.com,shop.example.com ./nanolytica
 ### How It Works
 
 - The "default" site is always available (uses the configured `NANOLYTICA_DB_PATH`)
-- Additional sites store data in `{data_dir}/{site_name}.db`
+- New sites can be added via the dashboard UI (creates `{data_dir}/{site_name}.db`)
+- Existing `.db` files in the data directory are auto-discovered on startup
 - Each site has its own salt, so IP hashes are not correlated across sites
 - Site names allow alphanumeric characters, dots, hyphens, and underscores (max 64 chars)
 - Requests with unknown site names are silently dropped
