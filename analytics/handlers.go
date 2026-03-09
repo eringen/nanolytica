@@ -24,12 +24,25 @@ var pathRegex = regexp.MustCompile(`^[^\x00-\x1f\x7f]*$`)
 
 // Handler handles analytics HTTP requests.
 type Handler struct {
-	store *Store
+	registry *SiteRegistry
 }
 
 // NewHandler creates a new analytics handler.
-func NewHandler(store *Store) *Handler {
-	return &Handler{store: store}
+func NewHandler(registry *SiteRegistry) *Handler {
+	return &Handler{registry: registry}
+}
+
+// getStore returns the Store for the site specified in the query param, falling back to default.
+func (h *Handler) getStore(c echo.Context) *Store {
+	site := c.QueryParam("site")
+	if site == "" {
+		site = "default"
+	}
+	store := h.registry.GetStore(site)
+	if store == nil {
+		return h.registry.DefaultStore()
+	}
+	return store
 }
 
 // CollectRequest is the expected request body for the collect endpoint.
@@ -40,6 +53,7 @@ type CollectRequest struct {
 	UserAgent   string `json:"user_agent"`
 	DurationSec int    `json:"duration_sec"`
 	ScrollDepth int    `json:"scroll_depth"`
+	Site        string `json:"site"`
 }
 
 // Input validation limits for the collect endpoint.
@@ -50,6 +64,7 @@ const (
 	maxUserAgentLen  = 512
 	maxDurationSec   = 86400 // 24 hours
 	maxScrollDepth   = 100
+	maxSiteLen       = 64
 )
 
 // validateCollectRequest checks field lengths and value ranges.
@@ -84,6 +99,9 @@ func validateCollectRequest(req *CollectRequest) error {
 	if req.ScrollDepth > maxScrollDepth {
 		return fmt.Errorf("scroll_depth exceeds maximum of %d", maxScrollDepth)
 	}
+	if len(req.Site) > maxSiteLen {
+		return fmt.Errorf("site exceeds maximum length of %d", maxSiteLen)
+	}
 	return nil
 }
 
@@ -114,11 +132,22 @@ func (h *Handler) Collect(c echo.Context) error {
 	// Get client IP
 	ip := c.RealIP()
 
+	// Get store for site
+	site := req.Site
+	if site == "" {
+		site = "default"
+	}
+	store := h.registry.GetStore(site)
+	if store == nil {
+		// Unknown site — silently ignore
+		return c.NoContent(http.StatusNoContent)
+	}
+
 	// Handle bot visits separately
 	if IsBot(userAgent) {
-		h.store.EnqueueBotVisit(&BotVisit{
+		store.EnqueueBotVisit(&BotVisit{
 			BotName:   ExtractBotName(userAgent),
-			IPHash:    HashIP(ip),
+			IPHash:    store.HashIP(ip),
 			UserAgent: userAgent,
 			Path:      req.Path,
 			Timestamp: time.Now().UTC(),
@@ -127,7 +156,7 @@ func (h *Handler) Collect(c echo.Context) error {
 	}
 
 	// Generate visitor ID
-	visitorID := GenerateVisitorID(ip, userAgent)
+	visitorID := store.GenerateVisitorID(ip, userAgent)
 
 	// Parse browser, OS, device
 	browser, os, device := ParseUserAgent(userAgent)
@@ -136,10 +165,10 @@ func (h *Handler) Collect(c echo.Context) error {
 	referrer := CleanReferrer(req.Referrer)
 
 	// Enqueue visit for async batch insert
-	h.store.EnqueueVisit(&Visit{
+	store.EnqueueVisit(&Visit{
 		VisitorID:   visitorID,
 		SessionID:   generateSessionID(visitorID),
-		IPHash:      HashIP(ip),
+		IPHash:      store.HashIP(ip),
 		Browser:     browser,
 		OS:          os,
 		Device:      device,
@@ -169,13 +198,14 @@ func (h *Handler) GetStats(c echo.Context) error {
 
 	from, to := periodTimeRange(days, hourly)
 
-	stats, err := h.store.GetStats(from, to, hourly, monthly)
+	store := h.getStore(c)
+	stats, err := store.GetStats(from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get stats: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
 	}
 
-	realtime, _ := h.store.GetRealtimeVisitors()
+	realtime, _ := store.GetRealtimeVisitors()
 
 	return c.JSON(http.StatusOK, StatsResponse{
 		Stats:      stats,
@@ -192,13 +222,14 @@ func (h *Handler) GetStatsFragment(c echo.Context) error {
 
 	from, to := periodTimeRange(days, hourly)
 
-	stats, err := h.store.GetStats(from, to, hourly, monthly)
+	store := h.getStore(c)
+	stats, err := store.GetStats(from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get stats fragment: %v", err)
 		return c.HTML(http.StatusInternalServerError, "<div class='loading'>Error loading data</div>")
 	}
 
-	realtime, _ := h.store.GetRealtimeVisitors()
+	realtime, _ := store.GetRealtimeVisitors()
 
 	// Convert to view model
 	statsVM := convertStatsToViewModel(stats)
@@ -222,7 +253,8 @@ func (h *Handler) GetBotStats(c echo.Context) error {
 
 	from, to := periodTimeRange(days, hourly)
 
-	stats, err := h.store.GetBotStats(from, to, hourly, monthly)
+	store := h.getStore(c)
+	stats, err := store.GetBotStats(from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get bot stats: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
@@ -242,7 +274,8 @@ func (h *Handler) GetBotStatsFragment(c echo.Context) error {
 
 	from, to := periodTimeRange(days, hourly)
 
-	stats, err := h.store.GetBotStats(from, to, hourly, monthly)
+	store := h.getStore(c)
+	stats, err := store.GetBotStats(from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get bot stats fragment: %v", err)
 		return c.HTML(http.StatusInternalServerError, "<div class='loading'>Error loading data</div>")
@@ -259,7 +292,11 @@ func (h *Handler) GetBotStatsFragment(c echo.Context) error {
 // GetSetupFragment returns HTML fragment for setup tab (talkDOM)
 func (h *Handler) GetSetupFragment(c echo.Context) error {
 	origin := c.Scheme() + "://" + c.Request().Host
-	component := templates.SetupContent(origin)
+	site := c.QueryParam("site")
+	if site == "" {
+		site = "default"
+	}
+	component := templates.SetupContent(origin, site)
 	return component.Render(c.Request().Context(), c.Response())
 }
 
@@ -440,7 +477,8 @@ func (h *Handler) ExportStatsCSV(c echo.Context) error {
 	period, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 	from, to := periodTimeRange(days, hourly)
 
-	stats, err := h.store.GetStats(from, to, hourly, monthly)
+	store := h.getStore(c)
+	stats, err := store.GetStats(from, to, hourly, monthly)
 	if err != nil {
 		return c.String(http.StatusInternalServerError, "Failed to export stats")
 	}
@@ -516,7 +554,8 @@ func (h *Handler) ExportBotStatsCSV(c echo.Context) error {
 	period, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 	from, to := periodTimeRange(days, hourly)
 
-	stats, err := h.store.GetBotStats(from, to, hourly, monthly)
+	store := h.getStore(c)
+	stats, err := store.GetBotStats(from, to, hourly, monthly)
 	if err != nil {
 		return c.String(http.StatusInternalServerError, "Failed to export bot stats")
 	}
@@ -601,5 +640,10 @@ func (h *Handler) Dashboard(c echo.Context) error {
 
 // DashboardHTML serves the standalone HTML dashboard using templ.
 func (h *Handler) DashboardHTML(c echo.Context) error {
-	return templates.Dashboard().Render(c.Request().Context(), c.Response())
+	sites := h.registry.ListSites()
+	currentSite := c.QueryParam("site")
+	if currentSite == "" {
+		currentSite = "default"
+	}
+	return templates.Dashboard(sites, currentSite).Render(c.Request().Context(), c.Response())
 }

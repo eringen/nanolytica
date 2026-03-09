@@ -15,8 +15,8 @@ templ PeriodSelectorWithBotStats(period string, stats *BotStatsViewModel, days i
 }
 
 // SetupContent renders the setup tab content
-templ SetupContent(origin string) {
-	@SetupFragment(origin)
+templ SetupContent(origin string, site string) {
+	@SetupFragment(origin, site)
 }
 
 // StatsFragment renders the complete stats view as HTML fragment
@@ -244,12 +244,16 @@ templ Bar(label string, value int, max int) {
 }
 
 // SetupFragment renders the setup tab content
-templ SetupFragment(origin string) {
+templ SetupFragment(origin string, site string) {
 	<div class="info-box">
-		<h3>📋 Quick Setup</h3>
+		<h3>Quick Setup</h3>
 		<p class="text-sm text-blue-700">Add this single line to your HTML <code class="bg-blue-100 px-1 rounded">&lt;head&gt;</code> or before the closing <code class="bg-blue-100 px-1 rounded">&lt;/body&gt;</code> tag:</p>
 		<div class="code-block">
-			<code>&lt;script src="{ origin }/nanolytica.js"&gt;&lt;/script&gt;</code>
+			if site != "" && site != "default" {
+				<code>&lt;script src="{ origin }/nanolytica.js" data-site="{ site }"&gt;&lt;/script&gt;</code>
+			} else {
+				<code>&lt;script src="{ origin }/nanolytica.js"&gt;&lt;/script&gt;</code>
+			}
 		</div>
 	</div>
 	

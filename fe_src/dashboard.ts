@@ -17,6 +17,7 @@
     currentTab: DashboardTab;
     visitorPeriod: TimePeriod;
     botPeriod: TimePeriod;
+    currentSite: string;
   }
 
   interface TalkDOM {
@@ -44,7 +45,8 @@
   const state: DashboardState = {
     currentTab: 'visitors',
     visitorPeriod: 'week',
-    botPeriod: 'week'
+    botPeriod: 'week',
+    currentSite: 'default'
   };
 
   // ============================================================================
@@ -52,12 +54,13 @@
   // ============================================================================
 
   function getContentUrl(): string {
+    const site = encodeURIComponent(state.currentSite);
     if (state.currentTab === 'setup') {
-      return ENDPOINTS.setup;
+      return ENDPOINTS.setup + '?site=' + site;
     }
     const endpoint = state.currentTab === 'bots' ? ENDPOINTS.botStats : ENDPOINTS.stats;
     const period = state.currentTab === 'bots' ? state.botPeriod : state.visitorPeriod;
-    return endpoint + '?period=' + period;
+    return endpoint + '?period=' + period + '&site=' + site;
   }
 
   function loadContent(): void {
@@ -148,6 +151,16 @@
 
   function init(): void {
     if (typeof window === 'undefined') return;
+
+    // Initialize site selector
+    const siteSelect = document.querySelector('[data-site-selector]') as HTMLSelectElement | null;
+    if (siteSelect) {
+      state.currentSite = siteSelect.value;
+      siteSelect.addEventListener('change', () => {
+        state.currentSite = siteSelect.value;
+        loadContent();
+      });
+    }
 
     // Single click listener for all interactive buttons
     document.addEventListener('click', handleClick);

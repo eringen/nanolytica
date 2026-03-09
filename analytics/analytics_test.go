@@ -5,10 +5,9 @@ import (
 	"testing"
 )
 
-// TestMain sets up a test salt so HashIP/GenerateVisitorID tests don't panic.
+const testSalt = "test-salt-for-unit-tests"
+
 func TestMain(m *testing.M) {
-	salt.value = "test-salt-for-unit-tests"
-	salt.initialized = true
 	os.Exit(m.Run())
 }
 
@@ -266,55 +265,34 @@ func TestCleanReferrer_DomainWithWWW(t *testing.T) {
 	}
 }
 
-// --- Salt initialization tests ---
-
-func TestGetSalt_PanicsWithoutInit(t *testing.T) {
-	// Save and clear salt state
-	origValue := salt.value
-	origInit := salt.initialized
-	salt.value = ""
-	salt.initialized = false
-
-	defer func() {
-		// Restore salt state
-		salt.value = origValue
-		salt.initialized = origInit
-
-		r := recover()
-		if r == nil {
-			t.Fatal("expected getSalt to panic when salt is not initialized")
-		}
-	}()
-
-	getSalt()
-}
-
-func TestSaltInitialized(t *testing.T) {
-	if !SaltInitialized() {
-		t.Error("expected SaltInitialized() to return true after TestMain setup")
-	}
-}
-
 // --- HashIP tests ---
 
 func TestHashIP_Deterministic(t *testing.T) {
-	h1 := HashIP("192.168.1.1")
-	h2 := HashIP("192.168.1.1")
+	h1 := HashIP(testSalt, "192.168.1.1")
+	h2 := HashIP(testSalt, "192.168.1.1")
 	if h1 != h2 {
 		t.Errorf("same IP should produce same hash, got %s and %s", h1, h2)
 	}
 }
 
 func TestHashIP_DifferentIPs(t *testing.T) {
-	h1 := HashIP("192.168.1.1")
-	h2 := HashIP("10.0.0.1")
+	h1 := HashIP(testSalt, "192.168.1.1")
+	h2 := HashIP(testSalt, "10.0.0.1")
 	if h1 == h2 {
 		t.Errorf("different IPs should produce different hashes")
 	}
 }
 
+func TestHashIP_DifferentSalts(t *testing.T) {
+	h1 := HashIP("salt-a", "192.168.1.1")
+	h2 := HashIP("salt-b", "192.168.1.1")
+	if h1 == h2 {
+		t.Errorf("different salts should produce different hashes")
+	}
+}
+
 func TestHashIP_Length(t *testing.T) {
-	h := HashIP("192.168.1.1")
+	h := HashIP(testSalt, "192.168.1.1")
 	if len(h) != 16 {
 		t.Errorf("expected hash length 16, got %d", len(h))
 	}
@@ -323,17 +301,35 @@ func TestHashIP_Length(t *testing.T) {
 // --- GenerateVisitorID tests ---
 
 func TestGenerateVisitorID_Deterministic(t *testing.T) {
-	v1 := GenerateVisitorID("192.168.1.1", "Chrome")
-	v2 := GenerateVisitorID("192.168.1.1", "Chrome")
+	v1 := GenerateVisitorID(testSalt, "192.168.1.1", "Chrome")
+	v2 := GenerateVisitorID(testSalt, "192.168.1.1", "Chrome")
 	if v1 != v2 {
 		t.Errorf("same inputs should produce same visitor ID")
 	}
 }
 
 func TestGenerateVisitorID_DifferentUA(t *testing.T) {
-	v1 := GenerateVisitorID("192.168.1.1", "Chrome")
-	v2 := GenerateVisitorID("192.168.1.1", "Firefox")
+	v1 := GenerateVisitorID(testSalt, "192.168.1.1", "Chrome")
+	v2 := GenerateVisitorID(testSalt, "192.168.1.1", "Firefox")
 	if v1 == v2 {
 		t.Errorf("different UAs should produce different visitor IDs")
+	}
+}
+
+// --- ValidateSiteName tests ---
+
+func TestValidateSiteName(t *testing.T) {
+	valid := []string{"default", "mysite", "blog.example.com", "my-site_1", "a", "A1"}
+	for _, name := range valid {
+		if !ValidateSiteName(name) {
+			t.Errorf("expected %q to be valid", name)
+		}
+	}
+
+	invalid := []string{"", "../escape", "a/b", "has spaces", string(make([]byte, 65))}
+	for _, name := range invalid {
+		if ValidateSiteName(name) {
+			t.Errorf("expected %q to be invalid", name)
+		}
 	}
 }

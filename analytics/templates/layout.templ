@@ -84,6 +84,22 @@ templ PeriodSelector(activePeriod string) {
 	</div>
 }
 
+// SiteSelector renders the site dropdown when multiple sites are configured
+templ SiteSelector(sites []string, currentSite string) {
+	<div class="flex items-center gap-2 mb-4" id="site-selector">
+		<label class="text-sm text-gray-600 font-medium">Site:</label>
+		<select class="site-select text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" data-site-selector>
+			for _, site := range sites {
+				if site == currentSite {
+					<option value={ site } selected>{ site }</option>
+				} else {
+					<option value={ site }>{ site }</option>
+				}
+			}
+		</select>
+	</div>
+}
+
 // ContentContainer renders the main content area
 templ ContentContainer() {
 	<div id="content" receiver="content" class="animate-fade-in">

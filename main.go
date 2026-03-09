@@ -39,20 +39,26 @@ func main() {
 			dbCfg.MaxIdleConns = n
 		}
 	}
-	store, err := analytics.NewStoreWithConfig(dbPath, dbCfg)
-	if err != nil {
-		log.Fatalf("Failed to initialize analytics store: %v", err)
+
+	// Parse multi-site configuration
+	var sites []string
+	if sitesStr := os.Getenv("NANOLYTICA_SITES"); sitesStr != "" {
+		for _, s := range strings.Split(sitesStr, ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				sites = append(sites, s)
+			}
+		}
 	}
-	defer store.Close()
+
+	registry, err := analytics.NewSiteRegistry(dbPath, sites, dbCfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize site registry: %v", err)
+	}
+	defer registry.Close()
 
 	// Start daily cleanup of data older than 365 days
-	stopCleanup := store.StartCleanupScheduler(365, 24*time.Hour)
+	stopCleanup := registry.StartCleanupSchedulers(365, 24*time.Hour)
 	defer stopCleanup()
-
-	// Initialize hash salt (persisted in DB)
-	if err := analytics.InitSalt(store); err != nil {
-		log.Fatalf("Failed to initialize hash salt: %v", err)
-	}
 
 	// Start periodic cleanup of expired auth failure entries
 	stopAuthCleanup := startAuthCleanup()
@@ -62,7 +68,7 @@ func main() {
 	loadTrackingScript()
 
 	// Create handler
-	handler := analytics.NewHandler(store)
+	handler := analytics.NewHandler(registry)
 
 	// Setup Echo
 	e := echo.New()

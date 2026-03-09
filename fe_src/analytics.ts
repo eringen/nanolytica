@@ -17,11 +17,13 @@
     readonly user_agent: string;
     readonly duration_sec: number;
     readonly scroll_depth: number;
+    readonly site: string;
   }
 
   interface TrackerConfig {
     readonly endpoint: string;
     readonly doNotTrack: boolean;
+    readonly site: string;
   }
 
   interface EngagementState {
@@ -69,6 +71,12 @@
     }
   }
 
+  function detectSite(): string {
+    const currentScript = document.currentScript as HTMLScriptElement | null;
+    if (!currentScript) return 'default';
+    return currentScript.getAttribute('data-site') || 'default';
+  }
+
   function isDoNotTrackEnabled(): boolean {
     const navigatorDnt = navigator.doNotTrack;
     const windowDnt = (window as Window & { doNotTrack?: string }).doNotTrack;
@@ -97,7 +105,8 @@
     const baseUrl = detectBaseUrl();
     return {
       endpoint: baseUrl + API_ENDPOINT,
-      doNotTrack: isDoNotTrackEnabled()
+      doNotTrack: isDoNotTrackEnabled(),
+      site: detectSite()
     };
   }
 
@@ -195,7 +204,8 @@
       screen_size: getScreenSize(),
       user_agent: getUserAgent(),
       duration_sec: Math.max(0, Math.round(engagedSec)),
-      scroll_depth: Math.min(100, Math.max(0, scrollDepth))
+      scroll_depth: Math.min(100, Math.max(0, scrollDepth)),
+      site: config.site
     };
   }
 

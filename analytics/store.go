@@ -2,7 +2,9 @@ package analytics
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"strconv"
@@ -24,6 +26,7 @@ const (
 type Store struct {
 	db         *sql.DB
 	q          *sqlcgen.Queries
+	salt       string
 	visitCh    chan *Visit
 	botVisitCh chan *BotVisit
 	stopWriter chan struct{}
@@ -101,6 +104,9 @@ func NewStoreWithConfig(dbPath string, cfg StoreConfig) (*Store, error) {
 	if err := s.migrate(); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	if err := s.initSalt(); err != nil {
+		return nil, fmt.Errorf("init salt: %w", err)
+	}
 
 	s.startWriteQueue()
 
@@ -112,6 +118,36 @@ func (s *Store) Close() error {
 	close(s.stopWriter)
 	s.writerDone.Wait()
 	return s.db.Close()
+}
+
+// initSalt loads or generates a persistent salt for IP hashing.
+func (s *Store) initSalt() error {
+	val, err := s.GetSetting("hash_salt")
+	if err != nil {
+		return fmt.Errorf("read hash salt: %w", err)
+	}
+	if val == "" {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return fmt.Errorf("generate salt: %w", err)
+		}
+		val = hex.EncodeToString(b)
+		if err := s.SetSetting("hash_salt", val); err != nil {
+			return fmt.Errorf("store hash salt: %w", err)
+		}
+	}
+	s.salt = val
+	return nil
+}
+
+// HashIP creates a salted SHA-256 hash of an IP address using this store's salt.
+func (s *Store) HashIP(ip string) string {
+	return HashIP(s.salt, ip)
+}
+
+// GenerateVisitorID creates a salted visitor ID from IP and User-Agent using this store's salt.
+func (s *Store) GenerateVisitorID(ip, userAgent string) string {
+	return GenerateVisitorID(s.salt, ip, userAgent)
 }
 
 // ensureSchema creates the necessary tables if they don't exist.

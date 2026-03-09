@@ -2,65 +2,12 @@
 package analytics
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 )
-
-// salt holds the per-installation random salt for IP hashing, protected by sync.Once.
-var salt struct {
-	once        sync.Once
-	value       string
-	initialized bool
-}
-
-// InitSalt loads or generates a persistent salt for IP hashing.
-// Must be called once at startup before any requests are served.
-func InitSalt(store *Store) error {
-	var initErr error
-	salt.once.Do(func() {
-		s, err := store.GetSetting("hash_salt")
-		if err != nil {
-			initErr = fmt.Errorf("read hash salt: %w", err)
-			return
-		}
-		if s == "" {
-			b := make([]byte, 32)
-			if _, err := rand.Read(b); err != nil {
-				initErr = fmt.Errorf("generate salt: %w", err)
-				return
-			}
-			s = hex.EncodeToString(b)
-			if err := store.SetSetting("hash_salt", s); err != nil {
-				initErr = fmt.Errorf("store hash salt: %w", err)
-				return
-			}
-		}
-		salt.value = s
-		salt.initialized = true
-	})
-	return initErr
-}
-
-// SaltInitialized reports whether InitSalt has been successfully called.
-func SaltInitialized() bool {
-	return salt.initialized
-}
-
-// getSalt returns the initialized salt value.
-// Panics if InitSalt was not called — this prevents silent privacy failures
-// where all IP hashes become deterministic across installations.
-func getSalt() string {
-	if !salt.initialized {
-		panic("analytics: getSalt called before InitSalt — IP hashing is not safe without a salt")
-	}
-	return salt.value
-}
 
 // Visit represents a single page view.
 type Visit struct {
@@ -149,16 +96,16 @@ type DailyView struct {
 }
 
 // HashIP creates a salted SHA-256 hash of an IP address.
-func HashIP(ip string) string {
+func HashIP(salt, ip string) string {
 	h := sha256.New()
-	h.Write([]byte(getSalt() + ip))
+	h.Write([]byte(salt + ip))
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
 // GenerateVisitorID creates a salted visitor ID from IP and User-Agent.
-func GenerateVisitorID(ip, userAgent string) string {
+func GenerateVisitorID(salt, ip, userAgent string) string {
 	h := sha256.New()
-	h.Write([]byte(getSalt() + ip + "|" + userAgent))
+	h.Write([]byte(salt + ip + "|" + userAgent))
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
