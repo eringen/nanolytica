@@ -1,0 +1,62 @@
+package templates
+
+// LoginPage renders the login page
+templ LoginPage(errorMsg string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>Login - Nanolytica</title>
+			<link rel="stylesheet" href="/static/css/styles.css"/>
+		</head>
+		<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+			<div class="w-full max-w-sm">
+				<div class="bg-white rounded-lg shadow-sm border border-gray-100 p-8">
+					<div class="text-center mb-8">
+						<h1 class="text-2xl font-bold text-gray-800">Nanolytica</h1>
+						<p class="text-sm text-gray-500 mt-1">Sign in to your dashboard</p>
+					</div>
+					if errorMsg != "" {
+						<div class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-md px-4 py-3 mb-6">
+							{ errorMsg }
+						</div>
+					}
+					<form method="POST" action="/admin/login">
+						<div class="mb-4">
+							<label for="username" class="block text-xs uppercase text-gray-500 font-medium tracking-wide mb-2">Username</label>
+							<input
+								type="text"
+								id="username"
+								name="username"
+								required
+								autocomplete="username"
+								class="w-full px-3 py-2.5 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-shadow"
+								placeholder="Enter username"
+							/>
+						</div>
+						<div class="mb-6">
+							<label for="password" class="block text-xs uppercase text-gray-500 font-medium tracking-wide mb-2">Password</label>
+							<input
+								type="password"
+								id="password"
+								name="password"
+								required
+								autocomplete="current-password"
+								class="w-full px-3 py-2.5 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-shadow"
+								placeholder="Enter password"
+							/>
+						</div>
+						<button
+							type="submit"
+							class="w-full bg-gray-900 text-white py-2.5 px-4 rounded-md text-sm font-medium hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+						>
+							Sign in
+						</button>
+					</form>
+				</div>
+				<p class="text-center text-xs text-gray-400 mt-6">Privacy-first analytics</p>
+			</div>
+		</body>
+	</html>
+}
