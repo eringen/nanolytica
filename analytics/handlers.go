@@ -39,6 +39,7 @@ type CollectRequest struct {
 	ScreenSize  string `json:"screen_size"`
 	UserAgent   string `json:"user_agent"`
 	DurationSec int    `json:"duration_sec"`
+	ScrollDepth int    `json:"scroll_depth"`
 }
 
 // Input validation limits for the collect endpoint.
@@ -48,6 +49,7 @@ const (
 	maxScreenSizeLen = 32
 	maxUserAgentLen  = 512
 	maxDurationSec   = 86400 // 24 hours
+	maxScrollDepth   = 100
 )
 
 // validateCollectRequest checks field lengths and value ranges.
@@ -75,6 +77,12 @@ func validateCollectRequest(req *CollectRequest) error {
 	}
 	if req.DurationSec > maxDurationSec {
 		return fmt.Errorf("duration_sec exceeds maximum of %d", maxDurationSec)
+	}
+	if req.ScrollDepth < 0 {
+		return fmt.Errorf("scroll_depth must not be negative")
+	}
+	if req.ScrollDepth > maxScrollDepth {
+		return fmt.Errorf("scroll_depth exceeds maximum of %d", maxScrollDepth)
 	}
 	return nil
 }
@@ -140,6 +148,7 @@ func (h *Handler) Collect(c echo.Context) error {
 		ScreenSize:  req.ScreenSize,
 		Timestamp:   time.Now().UTC(),
 		DurationSec: req.DurationSec,
+		ScrollDepth: req.ScrollDepth,
 	})
 
 	return c.NoContent(http.StatusNoContent)
@@ -310,6 +319,7 @@ func convertStatsToViewModel(stats *Stats) *templates.StatsViewModel {
 		UniqueVisitors: stats.UniqueVisitors,
 		TotalViews:     stats.TotalViews,
 		AvgDuration:    stats.AvgDuration,
+		AvgScrollDepth: stats.AvgScrollDepth,
 	}
 
 	// Convert TopPages
@@ -447,6 +457,7 @@ func (h *Handler) ExportStatsCSV(c echo.Context) error {
 	w.Write([]string{"Unique Visitors", strconv.Itoa(stats.UniqueVisitors)})
 	w.Write([]string{"Total Views", strconv.Itoa(stats.TotalViews)})
 	w.Write([]string{"Avg Duration (sec)", strconv.Itoa(stats.AvgDuration)})
+	w.Write([]string{"Avg Scroll Depth (%)", strconv.Itoa(stats.AvgScrollDepth)})
 	w.Write([]string{})
 
 	// Views over time

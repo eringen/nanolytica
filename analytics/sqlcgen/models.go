@@ -36,4 +36,5 @@ type Visit struct {
 	ScreenSize  sql.NullString
 	Timestamp   time.Time
 	DurationSec sql.NullInt64
+	ScrollDepth sql.NullInt64
 }

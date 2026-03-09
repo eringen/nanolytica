@@ -22,6 +22,17 @@ func (q *Queries) AvgDuration(ctx context.Context, timestamp time.Time, timestam
 	return avg, err
 }
 
+const avgScrollDepth = `-- name: AvgScrollDepth :one
+SELECT AVG(scroll_depth) FROM visits WHERE timestamp >= ? AND timestamp < ? AND scroll_depth > 0
+`
+
+func (q *Queries) AvgScrollDepth(ctx context.Context, timestamp time.Time, timestamp_2 time.Time) (sql.NullFloat64, error) {
+	row := q.db.QueryRowContext(ctx, avgScrollDepth, timestamp, timestamp_2)
+	var avg sql.NullFloat64
+	err := row.Scan(&avg)
+	return avg, err
+}
+
 const browserStats = `-- name: BrowserStats :many
 SELECT browser AS name, COUNT(*) AS count
 FROM visits
@@ -347,8 +358,8 @@ func (q *Queries) InsertBotVisit(ctx context.Context, arg InsertBotVisitParams) 
 
 const insertVisit = `-- name: InsertVisit :exec
 
-INSERT INTO visits (visitor_id, session_id, ip_hash, browser, os, device, path, referrer, screen_size, timestamp, duration_sec)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO visits (visitor_id, session_id, ip_hash, browser, os, device, path, referrer, screen_size, timestamp, duration_sec, scroll_depth)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertVisitParams struct {
@@ -363,6 +374,7 @@ type InsertVisitParams struct {
 	ScreenSize  sql.NullString
 	Timestamp   time.Time
 	DurationSec sql.NullInt64
+	ScrollDepth sql.NullInt64
 }
 
 // Inserts
@@ -379,6 +391,7 @@ func (q *Queries) InsertVisit(ctx context.Context, arg InsertVisitParams) error 
 		arg.ScreenSize,
 		arg.Timestamp,
 		arg.DurationSec,
+		arg.ScrollDepth,
 	)
 	return err
 }

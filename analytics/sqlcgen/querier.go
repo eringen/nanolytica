@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	AvgDuration(ctx context.Context, timestamp time.Time, timestamp_2 time.Time) (sql.NullFloat64, error)
+	AvgScrollDepth(ctx context.Context, timestamp time.Time, timestamp_2 time.Time) (sql.NullFloat64, error)
 	BrowserStats(ctx context.Context, timestamp time.Time, timestamp_2 time.Time) ([]BrowserStatsRow, error)
 	// Bot aggregations
 	CountBotVisits(ctx context.Context, timestamp time.Time, timestamp_2 time.Time) (int64, error)

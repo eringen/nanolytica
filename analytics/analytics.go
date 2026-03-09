@@ -76,6 +76,7 @@ type Visit struct {
 	ScreenSize  string    `json:"screen_size"`  // e.g., "1920x1080"
 	Timestamp   time.Time `json:"timestamp"`
 	DurationSec int       `json:"duration_sec"` // Time spent on page (0 if not available)
+	ScrollDepth int       `json:"scroll_depth"` // Max scroll depth percentage (0-100)
 }
 
 // BotVisit represents a single bot/crawler page view.
@@ -99,11 +100,12 @@ type VisitRequest struct {
 
 // Stats holds aggregated analytics data.
 type Stats struct {
-	Period        string            `json:"period"`
+	Period         string            `json:"period"`
 	UniqueVisitors int              `json:"unique_visitors"`
-	TotalViews    int               `json:"total_views"`
-	AvgDuration   int               `json:"avg_duration_sec"`
-	TopPages      []PageStat        `json:"top_pages"`
+	TotalViews     int               `json:"total_views"`
+	AvgDuration    int               `json:"avg_duration_sec"`
+	AvgScrollDepth int              `json:"avg_scroll_depth"`
+	TopPages       []PageStat        `json:"top_pages"`
 	LatestPages   []LatestPageVisit `json:"latest_pages"`
 	BrowserStats  []DimensionStat   `json:"browsers"`
 	OSStats       []DimensionStat   `json:"os"`

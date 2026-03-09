@@ -12,6 +12,7 @@ func TestValidateCollectRequest_Valid(t *testing.T) {
 		ScreenSize:  "1920x1080",
 		UserAgent:   "Mozilla/5.0",
 		DurationSec: 120,
+		ScrollDepth: 75,
 	}
 	if err := validateCollectRequest(req); err != nil {
 		t.Errorf("expected nil error for valid request, got: %v", err)
@@ -141,5 +142,35 @@ func TestValidateCollectRequest_DurationTooLarge(t *testing.T) {
 	}
 	if err := validateCollectRequest(req); err == nil {
 		t.Error("expected error for duration_sec exceeding maximum")
+	}
+}
+
+func TestValidateCollectRequest_ScrollDepthNegative(t *testing.T) {
+	req := &CollectRequest{
+		Path:        "/",
+		ScrollDepth: -1,
+	}
+	if err := validateCollectRequest(req); err == nil {
+		t.Error("expected error for negative scroll_depth")
+	}
+}
+
+func TestValidateCollectRequest_ScrollDepthTooLarge(t *testing.T) {
+	req := &CollectRequest{
+		Path:        "/",
+		ScrollDepth: maxScrollDepth + 1,
+	}
+	if err := validateCollectRequest(req); err == nil {
+		t.Error("expected error for scroll_depth exceeding maximum")
+	}
+}
+
+func TestValidateCollectRequest_ScrollDepthValid(t *testing.T) {
+	valid := []int{0, 1, 50, 100}
+	for _, sd := range valid {
+		req := &CollectRequest{Path: "/", ScrollDepth: sd}
+		if err := validateCollectRequest(req); err != nil {
+			t.Errorf("expected scroll_depth %d to be valid, got: %v", sd, err)
+		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -128,7 +129,8 @@ func (s *Store) ensureSchema() error {
 			referrer TEXT,
 			screen_size TEXT,
 			timestamp DATETIME NOT NULL,
-			duration_sec INTEGER DEFAULT 0
+			duration_sec INTEGER DEFAULT 0,
+			scroll_depth INTEGER DEFAULT 0
 		);
 
 		CREATE TABLE IF NOT EXISTS bot_visits (
@@ -164,7 +166,7 @@ func (s *Store) ensureSchema() error {
 }
 
 // currentSchemaVersion is the latest schema version. Increment when adding migrations.
-const currentSchemaVersion = 1
+const currentSchemaVersion = 2
 
 // migrate applies incremental schema migrations based on a version stored in the settings table.
 func (s *Store) migrate() error {
@@ -185,7 +187,22 @@ func (s *Store) migrate() error {
 		version = 1
 	}
 
+	if version < 2 {
+		if _, err := s.db.Exec(`ALTER TABLE visits ADD COLUMN scroll_depth INTEGER DEFAULT 0`); err != nil {
+			// Column may already exist if schema was created fresh
+			if !isColumnExistsError(err) {
+				return fmt.Errorf("migration v2: add scroll_depth: %w", err)
+			}
+		}
+		version = 2
+	}
+
 	return s.SetSetting("schema_version", strconv.Itoa(version))
+}
+
+// isColumnExistsError checks if an ALTER TABLE error is because the column already exists.
+func isColumnExistsError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "duplicate column")
 }
 
 // GetSetting retrieves a setting value by key. Returns empty string if not found.
@@ -216,6 +233,7 @@ func (s *Store) SaveVisit(v *Visit) error {
 		ScreenSize:  sql.NullString{String: v.ScreenSize, Valid: true},
 		Timestamp:   v.Timestamp.UTC(),
 		DurationSec: sql.NullInt64{Int64: int64(v.DurationSec), Valid: true},
+		ScrollDepth: sql.NullInt64{Int64: int64(v.ScrollDepth), Valid: true},
 	})
 }
 
@@ -327,6 +345,7 @@ func (s *Store) flushVisits(visits []*Visit) {
 			ScreenSize:  sql.NullString{String: v.ScreenSize, Valid: true},
 			Timestamp:   v.Timestamp.UTC(),
 			DurationSec: sql.NullInt64{Int64: int64(v.DurationSec), Valid: true},
+			ScrollDepth: sql.NullInt64{Int64: int64(v.ScrollDepth), Valid: true},
 		}); err != nil {
 			log.Printf("write queue: insert visit: %v", err)
 		}
@@ -427,6 +446,22 @@ func (s *Store) GetStats(from, to time.Time, hourly, monthly bool) (*Stats, erro
 		if avg.Valid {
 			mu.Lock()
 			stats.AvgDuration = int(avg.Float64)
+			mu.Unlock()
+		}
+	}()
+
+	// Average scroll depth
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		avg, err := s.q.AvgScrollDepth(ctx, from, to)
+		if err != nil {
+			setErr(fmt.Errorf("avg scroll depth: %w", err))
+			return
+		}
+		if avg.Valid {
+			mu.Lock()
+			stats.AvgScrollDepth = int(avg.Float64)
 			mu.Unlock()
 		}
 	}()

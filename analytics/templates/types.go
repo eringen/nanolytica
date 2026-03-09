@@ -8,6 +8,7 @@ type StatsViewModel struct {
 	UniqueVisitors int
 	TotalViews     int
 	AvgDuration    int
+	AvgScrollDepth int
 	TopPages       []PageStatViewModel
 	LatestPages    []LatestPageVisitViewModel
 	BrowserStats   []DimensionStatViewModel

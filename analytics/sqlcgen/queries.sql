@@ -10,8 +10,8 @@ ON CONFLICT(key) DO UPDATE SET value = excluded.value;
 -- Inserts
 
 -- name: InsertVisit :exec
-INSERT INTO visits (visitor_id, session_id, ip_hash, browser, os, device, path, referrer, screen_size, timestamp, duration_sec)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO visits (visitor_id, session_id, ip_hash, browser, os, device, path, referrer, screen_size, timestamp, duration_sec, scroll_depth)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertBotVisit :exec
 INSERT INTO bot_visits (bot_name, ip_hash, user_agent, path, timestamp)
@@ -27,6 +27,9 @@ SELECT COUNT(DISTINCT visitor_id) FROM visits WHERE timestamp >= ? AND timestamp
 
 -- name: AvgDuration :one
 SELECT AVG(duration_sec) FROM visits WHERE timestamp >= ? AND timestamp < ? AND duration_sec > 0;
+
+-- name: AvgScrollDepth :one
+SELECT AVG(scroll_depth) FROM visits WHERE timestamp >= ? AND timestamp < ? AND scroll_depth > 0;
 
 -- name: TopPages :many
 SELECT path, COUNT(*) AS views

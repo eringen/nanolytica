@@ -48,7 +48,7 @@ templ BotStatsFragmentOnly(stats *BotStatsViewModel, days int, hourly bool, mont
 
 // StatsGridStats renders the main stat cards
 templ StatsGridStats(stats *StatsViewModel, realtime int) {
-	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
 		<div class="stat-card">
 			<h3>Realtime (5min)</h3>
 			<div class="value realtime-value">{ formatNumber(realtime) }</div>
@@ -64,6 +64,10 @@ templ StatsGridStats(stats *StatsViewModel, realtime int) {
 		<div class="stat-card">
 			<h3>Avg. Duration</h3>
 			<div class="value">{ formatDuration(stats.AvgDuration) }</div>
+		</div>
+		<div class="stat-card">
+			<h3>Avg. Scroll Depth</h3>
+			<div class="value">{ formatScrollDepth(stats.AvgScrollDepth) }</div>
 		</div>
 	</div>
 }
@@ -309,6 +313,10 @@ func formatDuration(seconds int) string {
 		return fmt.Sprintf("%ds", seconds)
 	}
 	return fmt.Sprintf("%dm %ds", seconds/60, seconds%60)
+}
+
+func formatScrollDepth(depth int) string {
+	return fmt.Sprintf("%d%%", depth)
 }
 
 func chartTitle(hourly, monthly bool) string {
